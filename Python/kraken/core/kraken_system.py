@@ -5,34 +5,24 @@ KrakenSystem - Class for constructing the Fabric Engine Core client.
 
 """
 
+import logging
 import os
 import sys
 import json
-import imp
-import inspect
 import importlib
 from collections import OrderedDict
-import traceback
 
 import FabricEngine.Core
 
-import kraken
+# import kraken
 from kraken.core.profiler import Profiler
+from kraken.plugins import getFabricClient
 
-krakenSystemModuleDir = os.path.join(os.path.dirname(os.path.realpath(__file__)))
-krakenDir=os.path.abspath(os.path.join(krakenSystemModuleDir, '..', '..', '..'))
-os.environ['KRAKEN_PATH']  = krakenDir
+from kraken.log import getLogger
+from kraken.log.utils import fabricCallback
 
-krakenExtsDir = os.path.join(krakenDir, 'KLExts')
-if krakenExtsDir not in os.environ['FABRIC_EXTS_PATH']:
-    os.environ['FABRIC_EXTS_PATH'] = krakenExtsDir + ';' + os.environ['FABRIC_EXTS_PATH']
+logger = getLogger('kraken')
 
-canvasPresetsDir = os.path.join(krakenDir, 'CanvasPresets')
-if 'FABRIC_DFG_PATH' in os.environ:
-    if canvasPresetsDir not in os.environ['FABRIC_DFG_PATH']:
-        os.environ['FABRIC_DFG_PATH'] = canvasPresetsDir + ';' + os.environ['FABRIC_DFG_PATH']
-else:
-    os.environ['FABRIC_DFG_PATH'] = canvasPresetsDir
 
 class KrakenSystem(object):
     """The KrakenSystem is a singleton object used to provide an interface with
@@ -58,46 +48,23 @@ class KrakenSystem(object):
     def loadCoreClient(self):
         """Loads the Fabric Engine Core Client"""
 
-        if self.client == None:
+        if self.client is None:
             Profiler.getInstance().push("loadCoreClient")
 
-            try:
-                imp.find_module('cmds')
-                host = 'Maya'
-            except ImportError:
-                try:
-                    imp.find_module('sipyutils')
-                    host = 'Softimage'
-                except ImportError:
-                    host = 'Python'
+            client = getFabricClient()
+            if client is None:
+                options = {
+                    'reportCallback': fabricCallback,
+                    'guarded': True
+                }
 
-            if host == "Python":
-                self.client = FabricEngine.Core.createClient()
+                client = FabricEngine.Core.createClient(options)
 
-            elif host == "Maya":
-                contextID = cmds.fabricSplice('getClientContextID')
-                if contextID == '':
-                    cmds.fabricSplice('constructClient')
-                    contextID = cmds.fabricSplice('getClientContextID')
-
-                # Pull out the Splice client.
-                self.client = FabricEngine.Core.createClient({"contextID": contextID})
-
-            elif host == "Softimage":
-                from win32com.client.dynamic import Dispatch
-                si = Dispatch("XSI.Application").Application
-                contextID = si.fabricSplice('getClientContextID')
-                if contextID == '':
-                    si.fabricSplice('constructClient')
-                    contextID = si.fabricSplice('getClientContextID')
-
-                # Pull out the Splice client.
-                self.client = FabricEngine.Core.createClient({"contextID": contextID})
+            self.client = client
 
             self.loadExtension('Math')
-
-            # krakenDir = os.environ['KRAKEN_PATH']
-            # self.client.DFG.host.addPresetDir('', 'Kraken', os.path.join(krakenDir, 'CanvasPresets'))
+            self.loadExtension('Kraken')
+            self.loadExtension('KrakenForCanvas')
 
             Profiler.getInstance().pop()
 
@@ -161,12 +128,17 @@ class KrakenSystem(object):
                 try:
                     value = klType.create()
                 except:
-                    value = klType()
-                for i in range(0, len(typeDesc['members'])):
+                    try:
+                        return klType()
+                    except Exception as e:
+                        raise Exception("Error constructing RTVal:" + dataType)
+
+                for i in xrange(0, len(typeDesc['members'])):
                     memberName = typeDesc['members'][i]['name']
                     memberType = typeDesc['members'][i]['type']
                     if memberName in defaultValue:
                         setattr(value, memberName, self.constructRTVal(memberType, getattr(defaultValue, memberName)))
+
                 return value
 
             else:
@@ -311,41 +283,6 @@ class KrakenSystem(object):
         return self.registeredComponents[className]
 
 
-    def reloadAllComponents(self):
-        """Force the reload of all registered component modules
-
-        Return:
-        True if successful.
-
-        """
-
-        for componentClassPath in self.registeredComponents:
-            componentModulePath = self.registeredComponents[componentClassPath].__module__
-            if componentModulePath in sys.modules:
-                del(sys.modules[componentModulePath])
-
-        prevRegsteredComponents = self.registeredComponents.copy()
-        self.registeredComponents = {}
-
-        for componentClassPath in prevRegsteredComponents:
-            componentModulePath = prevRegsteredComponents[componentClassPath].__module__
-            try:
-                importlib.import_module(componentModulePath)
-            except Exception as e:
-                stack = traceback.format_tb(sys.exc_info()[2])
-                exception_list = []
-                exception_list.extend(stack)
-                exception_list.extend(traceback.format_exception_only(sys.exc_info()[0], sys.exc_info()[1]))
-
-                exception_str = "Traceback (most recent call last):\n"
-                exception_str += "".join(exception_list)
-                # Removing the last \n
-                exception_str = exception_str[:-1]
-                print(exception_str)
-
-        return True
-
-
     def getComponentClassNames(self):
         """Returns the names of the registered Python component classes
 
@@ -360,12 +297,25 @@ class KrakenSystem(object):
     def loadComponentModules(self):
         """Loads all the component modules and configs specified in the 'KRAKEN_PATHS' environment variable.
 
-        The kraken_examples are loaded at all times.
+        The kraken_components are loaded at all times.
+
+        Returns:
+            bool: True if all components loaded, else False.
 
         """
 
+        for componentClassPath in self.registeredComponents:
+            componentModulePath = self.registeredComponents[componentClassPath].__module__
+            if componentModulePath in sys.modules:
+                del(sys.modules[componentModulePath])
+
+        self.registeredComponents = {}
+
+        logger.info("Loading component modules...")
 
         def __importDirRecursive(path, parentModulePath=''):
+            isSuccessful = True
+
             contents = os.listdir(path)
             moduleFilefound = False
             for item in contents:
@@ -383,49 +333,68 @@ class KrakenSystem(object):
 
 
             if moduleFilefound:
-                for item in contents:
+                logger.info(" " + path + ":")
+                for i, item in enumerate(contents):
                     if os.path.isfile(os.path.join(path, item)):
-                        # parse all the files of given path and import python modules
+
+                        # Parse all the files of given path and import python
+                        # modules. The files in these folders really should be
+                        # limited to components, otherwise we are loading more
+                        # than modules and that is not clear.
+
+                        # TODO: Figure out a way to limit imports to just rig
+                        # component modules.
+
                         if item.endswith(".py") and item != "__init__.py":
-                            module = modulePath+"."+item[:-3]
+                            module = modulePath + "." + item[:-3]
                             try:
+                                logger.info("  " + module)
                                 importlib.import_module(module)
 
                             except ImportError, e:
-                                print e
-                                for arg in e.args:
-                                    print arg
+                                isSuccessful = False
+                                logging.exception("Error importing '" + module)
 
                             except Exception, e:
-                                for arg in e.args:
-                                    print arg
+                                isSuccessful = False
+                                logging.exception("Error Loading Modules'" + module)
+
+                logging.info("")
 
 
             for item in contents:
                 if os.path.isdir(os.path.join(path, item)):
                     if moduleFilefound:
-                        __importDirRecursive(os.path.join(path, item), modulePath)
+                        if not __importDirRecursive(os.path.join(path, item), modulePath):
+                            isSuccessful = False
                     else:
-                        __importDirRecursive(os.path.join(path, item))
+                        if not __importDirRecursive(os.path.join(path, item)):
+                            isSuccessful = False
+
+            return isSuccessful
 
 
         # find the kraken examples module in the same folder as the kraken module.
-        examplePaths = os.path.join(os.path.dirname(os.path.dirname(kraken.__file__)), 'kraken_examples')
-        __importDirRecursive(examplePaths)
+        print os.environ.get('KRAKEN_PATH')
+        default_component_path = os.path.normpath(os.path.join(os.environ.get('KRAKEN_PATH'), 'Python', 'kraken_components'))
+        isSuccessful = __importDirRecursive(default_component_path)
 
         pathsVar = os.getenv('KRAKEN_PATHS')
         if pathsVar is not None:
-            pathsList = pathsVar.split(';')
+            pathsList = pathsVar.split(os.pathsep)
             for path in pathsList:
 
                 if path == '':
                     continue
 
                 if not os.path.exists(path):
-                    print "Invalid Kraken Path: " + path
+                    logging.info("Invalid Kraken Path: " + path)
                     continue
 
-                __importDirRecursive(path)
+                if not __importDirRecursive(path):
+                    isSuccessful = False
+
+        return isSuccessful
 
 
     @classmethod
@@ -441,8 +410,6 @@ class KrakenSystem(object):
             cls.__instance = KrakenSystem()
 
         return cls.__instance
-
-
 
 
 ks = KrakenSystem.getInstance()

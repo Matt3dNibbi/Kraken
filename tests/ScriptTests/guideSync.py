@@ -3,7 +3,7 @@ import json
 from kraken import plugins
 from kraken.core.maths import Xfo, Vec3, Quat
 from kraken.core.objects.container import Container
-from kraken_examples.arm_component import ArmComponentGuide, ArmComponent
+from kraken_components.biped.arm_component import ArmComponentGuide, ArmComponent
 from kraken.core.profiler import Profiler
 from kraken.helpers.utility_methods import logHierarchy
 
@@ -53,9 +53,17 @@ def buildArm(mode='guide'):
         print Profiler.getInstance().generateReport()
     else:
         if mode == 'guide':
-            logHierarchy(armGuide)
+            for each in armGuide.getItems().values():
+                # Only log hierarchy for Layer objects as Layers in this test are added to
+                # the component since there is no rig object.
+                if each.isTypeOf('Layer'):
+                    logHierarchy(each)
         elif mode == 'rig':
-            logHierarchy(arm)
+            for each in arm.getItems().values():
+                # Only log hierarchy for Layer objects as Layers in this test are added to
+                # the component since there is no rig object.
+                if each.isTypeOf('Layer'):
+                    logHierarchy(each)
 
 # Run once in guide mode, then in rig mode.
 # Delete Rig Hierarchy

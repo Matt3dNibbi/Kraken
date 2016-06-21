@@ -5,7 +5,9 @@ KLOperator - Splice operator object.
 
 """
 
-from kraken.core.maths import Mat44
+import pprint
+
+from kraken.core.maths import MathObject, Mat44, Xfo
 from kraken.core.objects.object_3d import Object3D
 from kraken.core.objects.operators.operator import Operator
 from kraken.core.objects.attributes.attribute import Attribute
@@ -53,7 +55,6 @@ class KLOperator(Operator):
                 else:
                     self.outputs[argName] = None
 
-
     def getSolverTypeName(self):
         """Returns the solver type name for this operator.
 
@@ -63,7 +64,6 @@ class KLOperator(Operator):
         """
 
         return self.solverTypeName
-
 
     def getExtension(self):
         """Returns the extention this operator uses.
@@ -75,7 +75,6 @@ class KLOperator(Operator):
 
         return self.extension
 
-
     def getSolverArgs(self):
         """Returns the args array defined by the KL Operator.
 
@@ -85,7 +84,6 @@ class KLOperator(Operator):
         """
 
         return self.args
-
 
     def generateSourceCode(self, arraySizes={}):
         """Returns the source code for a stub operator that will invoke the KL operator
@@ -98,10 +96,12 @@ class KLOperator(Operator):
         # Start constructing the source code.
         opSourceCode = "dfgEntry {\n"
 
-        # In SpliceMaya, output arrays are not resized by the system prior to calling into Splice, so we
-        # explicily resize the arrays in the generated operator stub code.
+        # In SpliceMaya, output arrays are not resized by the system prior to
+        # calling into Splice, so we explicily resize the arrays in the
+        # generated operator stub code.
         for argName, arraySize in arraySizes.iteritems():
-            opSourceCode += "  "+argName+".resize("+str(arraySize)+");\n"
+            opSourceCode += "  " + argName + ".resize(" + str(arraySize) + \
+                ");\n"
 
         opSourceCode += "  if(solver == null)\n"
         opSourceCode += "    solver = " + self.solverTypeName + "();\n"
@@ -118,22 +118,58 @@ class KLOperator(Operator):
 
         return opSourceCode
 
-
     def evaluate(self):
-        """invokes the Splice operator causing the output values to be computed.
+        """Invokes the KL operator causing the output values to be computed.
 
         Returns:
             bool: True if successful.
 
         """
 
-        def getRTVal(obj):
+        super(KLOperator, self).evaluate()
+
+        def getRTVal(obj, asInput=True):
             if isinstance(obj, Object3D):
-                return obj.xfo.getRTVal().toMat44('Mat44')
+                if asInput:
+                    return obj.globalXfo.getRTVal().toMat44('Mat44')
+                else:
+                    return obj.xfo.getRTVal().toMat44('Mat44')
+            elif isinstance(obj, Xfo):
+                return obj.getRTVal().toMat44('Mat44')
+            elif isinstance(obj, MathObject):
+                return obj.getRTVal()
             elif isinstance(obj, Attribute):
                 return obj.getRTVal()
+            elif type(obj) in (int, float, bool, str):
+                return obj
+
+        def validateArg(rtVal, argName, argDataType):
+            """Validate argument types when passing built in Python types.
+
+            Args:
+                rtVal (RTVal): rtValue object.
+                argName (str): Name of the argument being validated.
+                argDataType (str): Type of the argument being validated.
+
+            """
+
+            # Validate types when passing a built in Python type
+            if type(rtVal) in (bool, str, int, float):
+                if argDataType in ('Scalar', 'Float32', 'UInt32', 'Integer'):
+                    if type(rtVal) not in (float, int):
+                        raise TypeError(self.getName() + ".evaluate(): Invalid Argument Value: " + str(rtVal) + " (" + type(rtVal).__name__ + "), for Argument: " + argName + " (" + argDataType + ")")
+
+                elif argDataType == 'Boolean':
+                    if type(rtVal) != bool:
+                        raise TypeError(self.getName() + ".evaluate(): Invalid Argument Value: " + str(rtVal) + " (" + type(rtVal).__name__ + "), for Argument: " + argName + " (" + argDataType + ")")
+
+                elif argDataType == 'String':
+                    if type(rtVal) != str:
+                        raise TypeError(self.getName() + ".evaluate(): Invalid Argument Value: " + str(rtVal) + " (" + type(rtVal).__name__ + "), for Argument: " + argName + " (" + argDataType + ")")
+
 
         argVals = []
+        debug = []
         for i in xrange(len(self.args)):
             arg = self.args[i]
             argName = arg.name.getSimpleType()
@@ -152,31 +188,83 @@ class KLOperator(Operator):
 
             if argConnectionType == 'In':
                 if str(argDataType).endswith('[]'):
-                    rtValArray = ks.rtVal(argDataType[:-2]+'Array')
+                    rtValArray = ks.rtVal(argDataType)
                     rtValArray.resize(len(self.inputs[argName]))
                     for j in xrange(len(self.inputs[argName])):
-                        rtValArray[j] = getRTVal(self.inputs[argName][j])
+                        rtVal = getRTVal(self.inputs[argName][j])
+
+                        validateArg(rtVal, argName, argDataType[:-2])
+
+                        rtValArray[j] = rtVal
+
                     argVals.append(rtValArray)
                 else:
-                    argVals.append(getRTVal(self.inputs[argName]))
+                    rtVal = getRTVal(self.inputs[argName])
+
+                    validateArg(rtVal, argName, argDataType)
+
+                    argVals.append(rtVal)
             else:
                 if str(argDataType).endswith('[]'):
-                    rtValArray = ks.rtVal(argDataType[:-2]+'Array')
+                    rtValArray = ks.rtVal(argDataType)
                     rtValArray.resize(len(self.outputs[argName]))
                     for j in xrange(len(self.outputs[argName])):
-                        rtValArray[j] = getRTVal(self.outputs[argName][j])
+                        rtVal = getRTVal(self.outputs[argName][j],
+                                         asInput=False)
+
+                        validateArg(rtVal, argName, argDataType[:-2])
+
+                        rtValArray[j] = rtVal
+
                     argVals.append(rtValArray)
                 else:
-                    argVals.append(getRTVal(self.outputs[argName]))
+                    rtVal = getRTVal(self.outputs[argName],
+                                     asInput=False)
 
-        self.solverRTVal.solve('', *argVals)
+                    validateArg(rtVal, argName, argDataType)
+
+                    argVals.append(rtVal)
+
+            debug.append(
+                {
+                    argName: [
+                        {
+                            "dataType": argDataType,
+                            "connectionType": argConnectionType
+                        },
+                        argVals[-1]
+                    ]
+                })
+
+        try:
+            self.solverRTVal.solve('', *argVals)
+        except:
+            errorMsg = "Possible problem with KL operator '" + \
+                self.getName() + "' arguments:"
+
+            print errorMsg
+            pprint.pprint(debug, width=800)
+
+            raise Exception(errorMsg)
 
         # Now put the computed values out to the connected output objects.
         def setRTVal(obj, rtval):
             if isinstance(obj, Object3D):
                 obj.xfo.setFromMat44(Mat44(rtval))
+            elif isinstance(obj, Xfo):
+                obj.setFromMat44(Mat44(rtval))
+            elif isinstance(obj, Mat44):
+                obj.setFromMat44(rtval)
             elif isinstance(obj, Attribute):
                 obj.setValue(rtval)
+            else:
+                if hasattr(obj, '__iter__'):
+                    print "Warning: Trying to set a KL port with an " + \
+                        "array directly."
+
+                print "Warning: Not setting rtval: %s\n\tfor output object: \
+                    %s\n\ton port: %s\n\tof KL object: %s\n." % \
+                    (rtval, obj, self.getName())
 
         for i in xrange(len(argVals)):
             arg = self.args[i]
@@ -185,7 +273,7 @@ class KLOperator(Operator):
             argConnectionType = arg.connectionType.getSimpleType()
 
             if argConnectionType != 'In':
-                if argDataType.endswith('[]'):
+                if str(argDataType).endswith('[]'):
                     for j in xrange(len(argVals[i])):
                         setRTVal(self.outputs[argName][j], argVals[i][j])
                 else:

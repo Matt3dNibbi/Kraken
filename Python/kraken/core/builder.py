@@ -5,28 +5,52 @@ Builder -- Base builder object to build objects in DCC.
 
 """
 
+import logging
+
+from kraken.log import getLogger
 
 from kraken.core.kraken_system import KrakenSystem
 from kraken.core.configs.config import Config
 from kraken.core.profiler import Profiler
 
-from kraken.core.objects.components.component import Component
-from kraken.core.objects.constraints.pose_constraint import PoseConstraint
+from kraken.core.objects.scene_item import SceneItem
+from kraken.core.objects.object_3d import Object3D
+from kraken.core.traverser import Traverser
+
+logger = getLogger('kraken')
+logger.setLevel(logging.INFO)
 
 
 class Builder(object):
-    """Builder object for building objects in DCC's. Sub-class per DCC in a
-    plugin."""
+    """Core Builder class for building objects.
 
+    Note:
+        Sub-class for each DCC in it's plugin directory.
 
-    def __init__(self, debugMode = False):
+    This builder traverses the graph and determines the the build order. Once
+    the build order has been determined, the builder iterates through the list
+    and builds each object type. Each object type has it's own method for users
+    to re-implement for each application.
+
+    Attributes:
+        _buildPhase_3DObjectsAttributes (type): Description.
+        _buildPhase_AttributeConnections (type): Description.
+        _buildPhase_ConstraintsOperators (type): Description.
+
+    """
+
+    _buildPhase_3DObjectsAttributes = 0
+    _buildPhase_AttributeConnections = 1
+    _buildPhase_ConstraintsOperators = 2
+
+    def __init__(self, debugMode=False):
         super(Builder, self).__init__()
         self._buildElements = []
+        self._sceneItemsById = {}
 
         self.config = Config.getInstance()
 
         self._debugMode = debugMode
-
 
     # ====================
     # Object registration
@@ -45,14 +69,18 @@ class Builder(object):
         """
 
         pairing = {
-                   'src': kSceneItem,
-                   'tgt': dccSceneItem
-                  }
+            "src": kSceneItem,
+            "tgt": dccSceneItem
+        }
 
         self._buildElements.append(pairing)
 
         return True
 
+    def deleteBuildElements(self):
+        """Clear out all dcc built elements from the scene if exist."""
+
+        return None
 
     def getDCCSceneItem(self, kSceneItem):
         """Given a kSceneItem, returns the built dcc scene item.
@@ -65,21 +93,32 @@ class Builder(object):
 
         """
 
-        for builtElement in self._buildElements:
-            if builtElement['src'] == kSceneItem:
-                return builtElement['tgt']
+        if isinstance(kSceneItem, SceneItem):
+            for builtElement in self._buildElements:
+                if builtElement['src'] == kSceneItem:
+                    return builtElement['tgt']
 
         return None
 
+    def getDCCSceneItemPairs(self):
+        """Returns all of the built dcc scene item pairs.
+
+        Returns:
+            array: An array of dicts with 'src' and 'tgt' key value pairs
+
+        """
+
+        return self._buildElements
 
     # ========================
     # SceneItem Build Methods
     # ========================
-    def buildContainer(self, kSceneItem, buildName):
+    def buildContainer(self, kContainer, buildName):
         """Builds a container / namespace object.
 
         Args:
-            kSceneItem (object): kSceneItem that represents a container to be built.
+            kContainer (object): kContainer that represents a container to be
+                built.
             buildName (string): The name to use on the built object.
 
         Returns:
@@ -87,8 +126,10 @@ class Builder(object):
 
         """
 
-        return None
+        logger.info("buildContainer: " + kContainer.getPath() + " as: " +
+                    buildName)
 
+        return self.buildLocator(kContainer, buildName)
 
     def buildLayer(self, kSceneItem, buildName):
         """Builds a layer object.
@@ -102,8 +143,9 @@ class Builder(object):
 
         """
 
-        return None
+        logger.info("buildLayer: " + kSceneItem.getPath() + " as: " + buildName)
 
+        return None
 
     def buildHierarchyGroup(self, kSceneItem, buildName):
         """Builds a hierarchy group object.
@@ -117,8 +159,11 @@ class Builder(object):
 
         """
 
-        return None
 
+        logger.info("buildHierarchyGroup: " + kSceneItem.getPath() + " as: " +
+                    buildName)
+
+        return None
 
     def buildGroup(self, kSceneItem, buildName):
         """Builds a group object.
@@ -132,8 +177,10 @@ class Builder(object):
 
         """
 
-        return None
+        logger.info("buildGroup: " + kSceneItem.getPath() + " as: " +
+                    buildName)
 
+        return None
 
     def buildJoint(self, kSceneItem, buildName):
         """Builds a joint object.
@@ -147,8 +194,10 @@ class Builder(object):
 
         """
 
-        return None
+        logger.info("buildJoint: " + kSceneItem.getPath() + " as: " +
+                    buildName)
 
+        return None
 
     def buildLocator(self, kSceneItem, buildName):
         """Builds a locator / null object.
@@ -162,8 +211,11 @@ class Builder(object):
 
         """
 
-        return None
 
+        logger.info("buildLocator: " + kSceneItem.getPath() + " as: " +
+                    buildName)
+
+        return None
 
     def buildCurve(self, kSceneItem, buildName):
         """Builds a Curve object.
@@ -177,8 +229,10 @@ class Builder(object):
 
         """
 
-        return None
+        logger.info("buildCurve: " + kSceneItem.getPath() + " as: " +
+                    buildName)
 
+        return None
 
     def buildControl(self, kSceneItem, buildName):
         """Builds a Control object.
@@ -192,8 +246,10 @@ class Builder(object):
 
         """
 
-        return None
+        logger.info("buildControl:" + kSceneItem.getPath() + " as: " +
+                    buildName)
 
+        return None
 
     # ========================
     # Attribute Build Methods
@@ -209,8 +265,9 @@ class Builder(object):
 
         """
 
-        return True
+        logger.info("buildBoolAttribute: " + kAttribute.getPath())
 
+        return True
 
     def buildScalarAttribute(self, kAttribute):
         """Builds a Float attribute.
@@ -223,8 +280,10 @@ class Builder(object):
 
         """
 
-        return True
 
+        logger.info("buildScalarAttribute: " + kAttribute.getPath())
+
+        return True
 
     def buildIntegerAttribute(self, kAttribute):
         """Builds a Integer attribute.
@@ -237,8 +296,10 @@ class Builder(object):
 
         """
 
-        return True
 
+        logger.info("buildIntegerAttribute: " + kAttribute.getPath())
+
+        return True
 
     def buildStringAttribute(self, kAttribute):
         """Builds a String attribute.
@@ -251,8 +312,9 @@ class Builder(object):
 
         """
 
-        return True
+        logger.info("buildStringAttribute: " + kAttribute.getPath())
 
+        return True
 
     def buildAttributeGroup(self, kAttributeGroup):
         """Builds attribute groups on the DCC object.
@@ -265,8 +327,9 @@ class Builder(object):
 
         """
 
-        return True
+        logger.info("buildAttributeGroup: " + kAttributeGroup.getPath())
 
+        return True
 
     def connectAttribute(self, kAttribute):
         """Connects the driver attribute to this one.
@@ -279,8 +342,10 @@ class Builder(object):
 
         """
 
-        return True
 
+        logger.info("connectAttribute: " + kAttribute.getPath())
+
+        return True
 
     # =========================
     # Constraint Build Methods
@@ -296,12 +361,13 @@ class Builder(object):
 
         """
 
-        constraineeDCCSceneItem = self.getDCCSceneItem(kConstraint.getConstrainee())
-        dccSceneItem = None # Add constraint object here.
+        logger.info("buildOrientationConstraint: " + kConstraint.getPath() +
+                    " to: " + kConstraint.getConstrainee().getPath())
+
+        dccSceneItem = None  # Add constraint object here.
         self._registerSceneItemPair(kConstraint, dccSceneItem)
 
         return dccSceneItem
-
 
     def buildPoseConstraint(self, kConstraint):
         """Builds an pose constraint represented by the kConstraint.
@@ -314,12 +380,13 @@ class Builder(object):
 
         """
 
-        constraineeDCCSceneItem = self.getDCCSceneItem(kConstraint.getConstrainee())
-        dccSceneItem = None # Add constraint object here.
+        logger.info("buildPoseConstraint: " + kConstraint.getPath() + " to: " +
+                    kConstraint.getConstrainee().getPath())
+
+        dccSceneItem = None  # Add constraint object here.
         self._registerSceneItemPair(kConstraint, dccSceneItem)
 
         return dccSceneItem
-
 
     def buildPositionConstraint(self, kConstraint):
         """Builds an position constraint represented by the kConstraint.
@@ -332,12 +399,13 @@ class Builder(object):
 
         """
 
-        constraineeDCCSceneItem = self.getDCCSceneItem(kConstraint.getConstrainee())
-        dccSceneItem = None # Add constraint object here.
+        logger.info("buildPositionConstraint:" + kConstraint.getPath() +
+                    " to: " + kConstraint.getConstrainee().getPath())
+
+        dccSceneItem = None  # Add constraint object here.
         self._registerSceneItemPair(kConstraint, dccSceneItem)
 
         return dccSceneItem
-
 
     def buildScaleConstraint(self, kConstraint):
         """Builds an scale constraint represented by the kConstraint.
@@ -350,62 +418,22 @@ class Builder(object):
 
         """
 
-        constraineeDCCSceneItem = self.getDCCSceneItem(kConstraint.getConstrainee())
-        dccSceneItem = None # Add constraint object here.
+        logger.info("buildScaleConstraint: " + kConstraint.getPath() +
+                    " to: " + kConstraint.getConstrainee().getPath())
+
+        dccSceneItem = None  # Add constraint object here.
         self._registerSceneItemPair(kConstraint, dccSceneItem)
 
         return dccSceneItem
 
-
     # ========================
     # Component Build Methods
     # ========================
-    def buildXfoConnection(self, componentInput):
-        """Builds the constraint between the target and connection target.
-
-        Args:
-            componentInput (object): kraken component input to build connections for.
-
-        Returns:
-            bool: True if successful.
-
-        """
-
-        if componentInput.isConnected() is False:
-            return False
-
-        connection = componentInput.getConnection()
-        connectionTarget = connection.getTarget()
-        inputTarget = componentInput.getTarget()
-
-        if connection.getDataType().endswith('[]'):
-            if componentInput.getIndex() > len(connection.getTarget()) - 1:
-
-                inputParent = componentInput.getParent()
-                inputParentDecoration = inputParent.getNameDecoration()
-                fullInputName = inputParent.getName() + inputParentDecoration + "." + componentInput.getName()
-
-                raise Exception(fullInputName + " index ("
-                                + str(componentInput.getIndex()) + ") is out of range ("
-                                + str(len(connection.getTarget()) - 1) + ")!")
-
-            connectionTarget = connection.getTarget()[componentInput.getIndex()]
-        else:
-            connectionTarget = connection.getTarget()
-
-        constraint = PoseConstraint('_'.join([inputTarget.getName(), 'To', connectionTarget.getName()]))
-        constraint.setMaintainOffset(True)
-        constraint.setConstrainee(inputTarget)
-        constraint.addConstrainer(connectionTarget)
-
-        dccSceneItem = self.buildPoseConstraint(constraint)
-        self._registerSceneItemPair(componentInput, dccSceneItem)
-
-        return True
-
-
     def buildAttributeConnection(self, componentInput):
         """Builds the link between the target and connection target.
+
+        Note:
+            Implement in DCC Plugins.
 
         Args:
             componentInput (object): kraken connection to build.
@@ -415,16 +443,18 @@ class Builder(object):
 
         """
 
-        # Implemented in DCC Plugins.
+        logger.info("buildAttributeConnection: " + componentInput.getPath())
 
         return True
-
 
     # =========================
     # Operator Builder Methods
     # =========================
     def buildKLOperator(self, kKLOperator):
         """Builds Splice Operators on the components.
+
+        Note:
+            Implement in DCC Plugins.
 
         Args:
             kOperator (object): kraken operator that represents a KL operator.
@@ -434,262 +464,254 @@ class Builder(object):
 
         """
 
+        logger.info("buildKLOperator:" + kKLOperator.getPath())
+
         return True
 
     def buildCanvasOperator(self, kOperator):
         """Builds Splice Operators on the components.
 
+        Note:
+            Implement in DCC Plugins.
+
         Args:
-            kOperator (object): kraken operator that represents a Canvas operator.
+            kOperator (object): kraken operator that represents a Canvas
+                operator.
 
         Returns:
             bool: True if successful.
 
         """
 
-        return True
+        logger.info("buildCanvasOperator: " + kOperator.getPath())
 
+        return True
 
     # =====================
     # Build Object Methods
     # =====================
-    def buildAttributes(self, kObject):
-        """Builds attributes on the DCC object.
-
-        Args:
-            kObject (SceneObject): kraken object to build attributes for.
-
-        Returns:
-            bool: True if successful.
-
-        """
-
-        for i in xrange(kObject.getNumAttributeGroups()):
-            attributeGroup = kObject.getAttributeGroupByIndex(i)
-
-            attributeCount = attributeGroup.getNumAttributes()
-            self.buildAttributeGroup(attributeGroup)
-
-        return True
-
-
-
-    def buildHierarchy(self, kObject, component=None):
-        """Builds the hierarchy for the supplied kObject.
+    def __buildSceneItem(self, kObject, phase):
+        """Builds the DCC sceneitem for the supplied kObject.
 
         Args:
             kObject (object): kraken object to build.
-            component (Component): component that this object belongs to.
+            phase (type): Description.
 
         Returns:
             object: DCC object that was created.
 
         """
 
-
         dccSceneItem = None
 
-        buildName = kObject.getBuildName()
+        buildName = kObject.getName()
+        if hasattr(kObject, 'getBuildName'):
+            buildName = kObject.getBuildName()
 
-        if self._debugMode:
-            print "building:" + kObject.getPath() + " as:" + buildName
+        logger.debug("building(" + str(phase) + "): " + kObject.getPath() +
+                     " as: " + buildName + " type: " + kObject.getTypeName())
 
         # Build Object
-        if kObject.isTypeOf("Container"):
-            dccSceneItem = self.buildContainer(kObject, buildName)
+        if kObject.isTypeOf("Rig"):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildContainer(kObject, buildName)
 
         elif kObject.isTypeOf("Layer"):
-            dccSceneItem = self.buildLayer(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildLayer(kObject, buildName)
 
         elif kObject.isTypeOf("Component"):
-            pass
+            return None
 
         elif kObject.isTypeOf("ComponentGroup"):
-            dccSceneItem = self.buildGroup(kObject, buildName)
-            component = kObject
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildGroup(kObject, buildName)
 
         elif kObject.isTypeOf("HierarchyGroup"):
-            dccSceneItem = self.buildHierarchyGroup(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildHierarchyGroup(kObject, buildName)
 
         elif kObject.isTypeOf("CtrlSpace"):
-            dccSceneItem = self.buildGroup(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildGroup(kObject, buildName)
+
+        elif kObject.isTypeOf("Transform"):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildGroup(kObject, buildName)
 
         elif kObject.isTypeOf("Locator"):
-            dccSceneItem = self.buildLocator(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildLocator(kObject, buildName)
 
         elif kObject.isTypeOf("Joint"):
-            dccSceneItem = self.buildJoint(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildJoint(kObject, buildName)
 
         elif kObject.isTypeOf("Control"):
-            dccSceneItem = self.buildControl(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildControl(kObject, buildName)
 
         elif kObject.isTypeOf("Curve"):
-            dccSceneItem = self.buildCurve(kObject, buildName)
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildCurve(kObject, buildName)
+
+        elif kObject.isTypeOf('AttributeGroup'):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildAttributeGroup(kObject)
+
+        elif kObject.isTypeOf("BoolAttribute"):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildBoolAttribute(kObject)
+            elif phase == self._buildPhase_AttributeConnections:
+                self.connectAttribute(kObject)
+
+        elif kObject.isTypeOf("ScalarAttribute"):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildScalarAttribute(kObject)
+            elif phase == self._buildPhase_AttributeConnections:
+                self.connectAttribute(kObject)
+
+        elif kObject.isTypeOf("IntegerAttribute"):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildIntegerAttribute(kObject)
+            elif phase == self._buildPhase_AttributeConnections:
+                self.connectAttribute(kObject)
+
+        elif kObject.isTypeOf("StringAttribute"):
+            if phase == self._buildPhase_3DObjectsAttributes:
+                dccSceneItem = self.buildStringAttribute(kObject)
+            elif phase == self._buildPhase_AttributeConnections:
+                self.connectAttribute(kObject)
+
+        elif kObject.isTypeOf("OrientationConstraint"):
+            if phase == self._buildPhase_ConstraintsOperators:
+                dccSceneItem = self.buildOrientationConstraint(kObject)
+
+        elif kObject.isTypeOf("PoseConstraint"):
+            if phase == self._buildPhase_ConstraintsOperators:
+                dccSceneItem = self.buildPoseConstraint(kObject)
+
+        elif kObject.isTypeOf("PositionConstraint"):
+            if phase == self._buildPhase_ConstraintsOperators:
+                dccSceneItem = self.buildPositionConstraint(kObject)
+
+        elif kObject.isTypeOf("ScaleConstraint"):
+            if phase == self._buildPhase_ConstraintsOperators:
+                dccSceneItem = self.buildScaleConstraint(kObject)
+
+        elif kObject.isTypeOf("KLOperator"):
+            if phase == self._buildPhase_ConstraintsOperators:
+                dccSceneItem = self.buildKLOperator(kObject)
+
+        elif kObject.isTypeOf("CanvasOperator"):
+            if phase == self._buildPhase_ConstraintsOperators:
+                dccSceneItem = self.buildCanvasOperator(kObject)
 
         # Important Note: The order of these tests is important.
         # New classes should be added above the classes they are derrived from.
         # No new types should be added below SceneItem here.
         elif kObject.isTypeOf("SceneItem"):
-            dccSceneItem = self.buildLocator(kObject, buildName)
+            if phase == 0:
+                dccSceneItem = self.buildLocator(kObject, buildName)
 
         else:
-            raise NotImplementedError(kObject.getName() + ' has an unsupported type: ' + str(type(kObject)))
+            raise NotImplementedError(kObject.getName() +
+                                      ' has an unsupported type: ' +
+                                      str(type(kObject)))
 
         if dccSceneItem is not None:
-            self.buildAttributes(kObject)
+            self._sceneItemsById[kObject.getId()] = dccSceneItem
+        else:
+            dccSceneItem = self._sceneItemsById.get(kObject.getId(), None)
+
+        if dccSceneItem is not None and isinstance(kObject, Object3D) and \
+                phase == self._buildPhase_ConstraintsOperators:
+
             self.setTransform(kObject)
             self.lockParameters(kObject)
             self.setVisibility(kObject)
             self.setObjectColor(kObject)
 
-        # Build children
-        for i in xrange(kObject.getNumChildren()):
-            child = kObject.getChildByIndex(i)
-            self.buildHierarchy(child, component)
-
         return dccSceneItem
 
-
-    def buildConstraints(self, kObject):
-        """Builds constraints for the supplied kObject.
+    def __buildSceneItemList(self, kObjects, phase):
+        """Builds the provided list of objects.
 
         Args:
-            kObject (object): kraken object to create constraints for.
+            kObjects (list): Objects to be built.
+            phase (int): Description.
 
         Returns:
-            bool: True if successful.
+            Type: True if successful.
 
         """
 
-        dccSceneItem = None
-        for i in xrange(kObject.getNumConstraints()):
-
-            constraint = kObject.getConstraintByIndex(i)
-
-            # Build Object
-            if constraint.isTypeOf("OrientationConstraint"):
-                dccSceneItem = self.buildOrientationConstraint(constraint)
-
-            elif constraint.isTypeOf("PoseConstraint"):
-                dccSceneItem = self.buildPoseConstraint(constraint)
-
-            elif constraint.isTypeOf("PositionConstraint"):
-                dccSceneItem = self.buildPositionConstraint(constraint)
-
-            elif constraint.isTypeOf("ScaleConstraint"):
-                dccSceneItem = self.buildScaleConstraint(constraint)
-
-            else:
-                raise NotImplementedError(constraint.getName() + ' has an unsupported type: ' + str(type(constraint)))
-
-        # Build children
-        for i in xrange(kObject.getNumChildren()):
-            child = kObject.getChildByIndex(i)
-            self.buildConstraints(child)
-
-        return True
+        for kObject in kObjects:
+            self.__buildSceneItem(kObject, phase)
 
 
-    def buildInputConnections(self, kObject):
-        """Builds the connections between the component inputs of each
-        component.
+    def build(self, kSceneItem):
+        """Builds a rig object.
 
-        Only input connections are built otherwise duplicate constraints / expressions
-        would be created.
+        We have to re-order component children by walking the graph to ensure
+        that inputs objects are in place for the dependent components.
 
         Args:
-            kObject (object): kraken object to create connections for.
+            kSceneItem (sceneitem): The item to be built.
 
         Returns:
-            bool: True if successful.
+            object: DCC Scene Item that is created.
 
         """
 
-        if kObject.isTypeOf('Component'):
+        Profiler.getInstance().push("build:" + kSceneItem.getName())
 
-            # Build input connections
-            for i in xrange(kObject.getNumInputs()):
+        traverser = Traverser('Children')
+        traverser.addRootItem(kSceneItem)
 
-                componentInput = kObject.getInputByIndex(i)
-                if componentInput.getTarget() is None or componentInput.getConnection() is None:
-                    continue
+        rootItems = traverser.traverse(
+            discoverCallback=traverser.discoverChildren,
+            discoveredItemsFirst=False)
 
-                if self._debugMode:
-                    print "buildConnection:" + componentInput.getName()
+        traverser = Traverser('Build')
+        for rootItem in rootItems:
+            traverser.addRootItem(rootItem)
+        traverser.traverse()
 
-                if componentInput.getDataType().startswith('Xfo'):
-                    self.buildXfoConnection(componentInput)
+        try:
+            self._preBuild(kSceneItem)
 
-                elif componentInput.getDataType().startswith(('Boolean', 'Float', 'Integer', 'String')):
-                    self.buildAttributeConnection(componentInput)
+            objects3d = traverser.getItemsOfType('Object3D')
+            attributeGroups = traverser.getItemsOfType(['AttributeGroup'])
+            attributes = traverser.getItemsOfType(['Attribute'])
 
-        # Build connections for children.
-        for i in xrange(kObject.getNumChildren()):
-            child = kObject.getChildByIndex(i)
-            self.buildInputConnections(child)
+            # build all 3D objects and attributes
+            self.__buildSceneItemList(objects3d,
+                                      self._buildPhase_3DObjectsAttributes)
 
-        return True
+            self.__buildSceneItemList(attributeGroups,
+                                      self._buildPhase_3DObjectsAttributes)
 
+            self.__buildSceneItemList(attributes,
+                                      self._buildPhase_3DObjectsAttributes)
 
-    def buildAttrConnections(self, kObject):
-        """Builds the connections between the component inputs and outputs of each
-        component.
+            # connect all attributes
+            self.__buildSceneItemList(attributes,
+                                      self._buildPhase_AttributeConnections)
 
-        Args:
-            kObject (object): kraken object to create connections for.
+            # build all additional connections
+            self.__buildSceneItemList(traverser.items,
+                                      self._buildPhase_ConstraintsOperators)
 
-        Returns:
-            bool: True if successful.
+        finally:
+            self._postBuild()
 
-        """
+            # Clear Config when finished.
+            self.config.clearInstance()
 
-        # Build input connections
-        for i in xrange(kObject.getNumAttributeGroups()):
-            attributeGroup = kObject.getAttributeGroupByIndex(i)
+        Profiler.getInstance().pop()
 
-            for y in xrange(attributeGroup.getNumAttributes()):
-                attribute = attributeGroup.getAttributeByIndex(y)
-                self.connectAttribute(attribute)
-
-        # Build connections for children.
-        for i in xrange(kObject.getNumChildren()):
-            child = kObject.getChildByIndex(i)
-            self.buildAttrConnections(child)
-
-        return True
-
-
-    def buildOperators(self, kObject):
-        """Build operators in the hierarchy.
-
-        Args:
-            kObject (object): kraken object to create operators for.
-
-        Returns:
-            bool: True if successful.
-
-        """
-
-        if kObject.isTypeOf('Component'):
-
-            # Build operators
-            for i in xrange(kObject.getNumOperators()):
-                operator = kObject.getOperatorByIndex(i)
-
-                if operator.isTypeOf('KLOperator'):
-                    self.buildKLOperator(operator)
-                elif operator.isTypeOf('CanvasOperator'):
-                    self.buildCanvasOperator(operator)
-                else:
-                    raise NotImplementedError(operator.getName() + ' has an unsupported type: ' + str(type(operator)))
-
-        # Build connections for children.
-        for i in xrange(kObject.getNumChildren()):
-            child = kObject.getChildByIndex(i)
-            self.buildOperators(child)
-
-        return True
-
+        return self.getDCCSceneItem(kSceneItem)
 
     # ==================
     # Parameter Methods
@@ -707,7 +729,6 @@ class Builder(object):
 
         return True
 
-
     # ===================
     # Visibility Methods
     # ===================
@@ -722,16 +743,7 @@ class Builder(object):
 
         """
 
-        if hasattr(kSceneItem, 'getShapeVisibility') is False:
-            return False
-
-        if kSceneItem.getShapeVisibility() is False:
-            pass
-
-            # Re-implement in DCC builders.
-
         return True
-
 
     # ================
     # Display Methods
@@ -758,12 +770,14 @@ class Builder(object):
         if objectColor is not None:
 
             if objectColor not in colors.keys():
-                raise ValueError("Invalid color '" + objectColor + "' set on: " + kSceneItem.getPath())
+                raise ValueError("Invalid color '" + objectColor +
+                                 "' set on: " + kSceneItem.getPath())
 
             buildColor = objectColor
 
         else:
-            # Find the first color mapping that matches a type in the object hierarchy.
+            #  Find the first color mapping that matches a type in the object
+            #  hierarchy.
             for typeName in typeNames:
                 if typeName in colorMap.keys():
                     if component is None:
@@ -771,10 +785,9 @@ class Builder(object):
                     else:
                         componentLocation = component.getLocation()
                         buildColor = colorMap[typeName][componentLocation]
-                    break;
+                    break
 
         return buildColor
-
 
     def setObjectColor(self, kSceneItem):
         """Sets the color on the dccSceneItem.
@@ -788,7 +801,6 @@ class Builder(object):
         """
 
         return True
-
 
     # ==================
     # Transform Methods
@@ -804,12 +816,7 @@ class Builder(object):
 
         """
 
-        dccSceneItem = self.getDCCSceneItem(kSceneItem)
-
-        # Re-implement in DCC builders.
-
         return True
-
 
     # ===============
     # Config Methods
@@ -823,7 +830,6 @@ class Builder(object):
         """
 
         return self.config
-
 
     def setConfig(self, config):
         """Sets the builder's config.
@@ -839,7 +845,6 @@ class Builder(object):
         self.config = config
 
         return True
-
 
     # ==============
     # Build Methods
@@ -857,55 +862,6 @@ class Builder(object):
 
         return True
 
-
-    def _build(self, kSceneItem):
-        """Protected build method.
-
-        Args:
-            kSceneItem (object): kraken kSceneItem object to build.
-
-        Returns:
-            bool: True if successful.
-
-        """
-
-        self.buildHierarchy(kSceneItem, component=None)
-        self.buildAttrConnections(kSceneItem)
-        self.buildInputConnections(kSceneItem)
-        self.buildOperators(kSceneItem)
-        self.buildConstraints(kSceneItem)
-
-        return True
-
-
-    def build(self, kSceneItem):
-        """Builds the supplied kSceneItem into a DCC representation.
-
-        Args:
-            kSceneItem (object): kraken kSceneItem object to build.
-
-        Returns:
-            object: The DCC scene item of the kSceneItem that was passed to the builder.
-
-        """
-
-        Profiler.getInstance().push("build:" + kSceneItem.getName())
-
-        try:
-            self._preBuild(kSceneItem)
-            self._build(kSceneItem)
-
-        finally:
-            self._postBuild()
-
-            # Clear Config when finished.
-            self.config.clearInstance()
-
-        Profiler.getInstance().pop()
-
-        return self.getDCCSceneItem(kSceneItem)
-
-
     def _postBuild(self):
         """Protected Post-Build method.
 
@@ -915,4 +871,3 @@ class Builder(object):
         """
 
         return True
-

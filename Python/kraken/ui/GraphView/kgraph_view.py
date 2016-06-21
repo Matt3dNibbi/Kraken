@@ -7,8 +7,11 @@ import copy
 from PySide import QtGui, QtCore
 
 from pyflowgraph.graph_view import GraphView
+from pyflowgraph.graph_view import MANIP_MODE_NONE, MANIP_MODE_SELECT, MANIP_MODE_PAN, MANIP_MODE_MOVE, MANIP_MODE_ZOOM
+
 from pyflowgraph.connection import Connection
 from pyflowgraph.selection_rect import SelectionRect
+
 from knode import KNode
 from kbackdrop import KBackdrop
 from edit_index_widget import EditIndexWidget
@@ -57,8 +60,8 @@ class KGraphView(GraphView):
                     componentOutput = componentInput.getConnection()
 
                     self.connectPorts(
-                        srcNode = componentOutput.getParent().getDecoratedName(), outputName = componentOutput.getName(),
-                        tgtNode = component.getDecoratedName(), inputName=componentInput.getName()
+                        srcNode=componentOutput.getParent().getDecoratedName(), outputName=componentOutput.getName(),
+                        tgtNode=component.getDecoratedName(), inputName=componentInput.getName()
                     )
 
         # Get backdrops from meta data
@@ -70,7 +73,6 @@ class KGraphView(GraphView):
                 backdropNode.setData(backdrop)
 
         self.frameAllNodes()
-
 
     def addConnection(self, connection, emitSignal=True):
 
@@ -85,7 +87,6 @@ class KGraphView(GraphView):
                 connection.setPenWidth(2.5)
 
         return connection
-
 
     def getNodesOfType(self, nodeType):
         """Gets all the nodes of the specified type.
@@ -110,6 +111,19 @@ class KGraphView(GraphView):
         modifiers = QtGui.QApplication.keyboardModifiers()
 
         if event.button() == QtCore.Qt.MouseButton.RightButton:
+
+            zoom_with_alt_rmb = self.window().preferences.getPreferenceValue('zoom_with_alt_rmb')
+            if zoom_with_alt_rmb and modifiers == QtCore.Qt.AltModifier:
+                self._manipulationMode = MANIP_MODE_ZOOM
+                self.setCursor(QtCore.Qt.SizeHorCursor)
+                self._lastMousePos = event.pos()
+                self._lastTransform = QtGui.QTransform(self.transform())
+                self._lastSceneRect = self.sceneRect()
+                self._lastSceneCenter = self._lastSceneRect.center()
+                self._lastScenePos = self.mapToScene(event.pos())
+                self._lastOffsetFromSceneCenter = self._lastScenePos - self._lastSceneCenter
+                return
+
 
             def graphItemAt(item):
                 if isinstance(item, KNode):
@@ -189,9 +203,8 @@ class KGraphView(GraphView):
 
         elif event.button() is QtCore.Qt.MouseButton.LeftButton and self.itemAt(event.pos()) is None:
             self.beginNodeSelection.emit()
-            self._manipulationMode = 1
+            self._manipulationMode = MANIP_MODE_SELECT
             self._mouseDownSelection = copy.copy(self.getSelectedNodes())
-            self.clearSelection(emitSignal=False)
             self._selectionRect = SelectionRect(graph=self, mouseDownPos=self.mapToScene(event.pos()))
 
         elif event.button() is QtCore.Qt.MouseButton.MiddleButton:
@@ -201,12 +214,11 @@ class KGraphView(GraphView):
                 return
 
             self.setCursor(QtCore.Qt.OpenHandCursor)
-            self._manipulationMode = 2
+            self._manipulationMode = MANIP_MODE_PAN
             self._lastPanPoint = self.mapToScene(event.pos())
 
         else:
             super(GraphView, self).mousePressEvent(event)
-
 
     def dragEnterEvent(self, event):
         textParts = event.mimeData().text().split(':')
@@ -235,6 +247,8 @@ class KGraphView(GraphView):
             component.setGraphPos(Vec2(dropPosition.x(), dropPosition.y()))
             node = KNode(self, component)
             self.addNode(node)
+
+            self.selectNode(node, clearSelection=True, emitSignal=False)
 
             event.acceptProposedAction()
         else:

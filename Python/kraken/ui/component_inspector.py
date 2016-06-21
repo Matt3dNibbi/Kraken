@@ -41,8 +41,8 @@ class ComponentInspector(BaseInspector):
             return self.component.getName()
 
         nameController = GetterSetterController('name', 'String', getter=getName, setter=setName)
-        nameWidget = EditorFactory.constructEditor(nameController, parent=self)
-        self.addEditor("name", nameWidget)
+        self.nameWidget = EditorFactory.constructEditor(nameController, parent=self)
+        self.addEditor("name", self.nameWidget)
 
         def setLocation(value):
             # Store original node name
@@ -55,7 +55,7 @@ class ComponentInspector(BaseInspector):
                 # Ideally, we should be using an MVC pattern where the UI listens to changes
                 # in the model, but we don't have an event system in KRaken. Instead we have to
                 # push changes to the UI widgets. (an awkward and not-scalable solution.)
-                self.nameWidget.setWidgetValue(self.component.getName())
+                # self.nameWidget.setWidgetValue(self.component.getName())
 
         def getLocation():
             return self.component.getLocation()
@@ -79,10 +79,14 @@ class ComponentInspector(BaseInspector):
             attributeWidget = EditorFactory.constructEditor(attributeController, parent=self)
             self.addEditor(attribute.getName(), attributeWidget)
 
-        for i in range(self.component.getNumAttributeGroups()):
+        for i in xrange(self.component.getNumAttributeGroups()):
+            attrGrp = self.component.getAttributeGroupByIndex(i)
+            if attrGrp.getName() == "implicitAttrGrp":
+                continue
+
             grp = self.component.getAttributeGroupByIndex(i)
             self.addSeparator(grp.getName())
-            for j in range(grp.getNumAttributes()):
+            for j in xrange(grp.getNumAttributes()):
                 displayAttribute(grp.getAttributeByIndex(j))
 
         # Add a stretch so that the widgets pack at the top.
@@ -99,7 +103,7 @@ class ComponentInspector(BaseInspector):
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)
 
-    from kraken_examples.arm_component import ArmComponentGuide
+    from kraken_components.biped.arm_component import ArmComponentGuide
     armGuide = ArmComponentGuide("arm")
 
     widget = ComponentInspector(component=armGuide)

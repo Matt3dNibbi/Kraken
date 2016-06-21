@@ -68,6 +68,13 @@ class RotationOrder(MathObject):
         return True
 
 
+    def __eq__(self, other):
+        return self.order == other.order
+
+    def __ne__(self, other):
+        return not self.order == other.order
+
+
     def clone(self):
         """Returns a clone of the RotationOrder.
 
@@ -93,6 +100,8 @@ class RotationOrder(MathObject):
 
         """
 
+        newOrder = 0
+
         if type(order) == str:
             lowerOrder = order.lower()
             if lowerOrder == 'xyz':
@@ -117,6 +126,8 @@ class RotationOrder(MathObject):
                 newOrder = 0
             else:
                 newOrder = order
+        else:
+            raise NotImplementedError("Cannot set rotation order with type: " + str(type(order)))
 
         if newOrder == 0:
             self._rtval.setXYZ('')

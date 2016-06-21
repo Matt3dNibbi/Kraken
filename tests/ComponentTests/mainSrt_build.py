@@ -1,7 +1,7 @@
 from kraken import plugins
-from kraken.core.maths import Xfo, Vec3, Quat
+from kraken.core.maths import Xfo, Vec3
 
-from kraken_examples.mainSrt_component import MainSrtComponentGuide, MainSrtComponentRig
+from kraken_components.generic.mainSrt_component import MainSrtComponentGuide, MainSrtComponentRig
 
 from kraken.core.profiler import Profiler
 from kraken.helpers.utility_methods import logHierarchy
@@ -11,11 +11,11 @@ Profiler.getInstance().push("mainSrt_build")
 
 mainSrtGuide = MainSrtComponentGuide("mainSrt")
 mainSrtGuide.loadData({
-                      "name": "mainSrt",
-                      "location": "M",
-                      "mainSrtXfo": Xfo(tr=Vec3(0.0, 0.0, 0.0)),
-                      "mainSrtSize": 3.0
-                     })
+    "name": "mainSrt",
+    "location": "M",
+    "mainSrtXfo": Xfo(tr=Vec3(0.0, 0.0, 0.0)),
+    "mainSrtSize": 3.0
+})
 
 # Save the main srt guide data for persistence.
 saveData = mainSrtGuide.saveData()
@@ -34,4 +34,8 @@ Profiler.getInstance().pop()
 if __name__ == "__main__":
     print Profiler.getInstance().generateReport()
 else:
-    logHierarchy(mainSrt)
+    for each in mainSrt.getItems().values():
+        # Only log hierarchy for Layer objects as Layers in this test are added to
+        # the component since there is no rig object.
+        if each.isTypeOf('Layer'):
+            logHierarchy(each)

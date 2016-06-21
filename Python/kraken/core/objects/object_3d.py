@@ -12,6 +12,14 @@ from kraken.core.objects.scene_item import SceneItem
 from kraken.core.maths.xfo import Xfo
 from kraken.core.maths.rotation_order import RotationOrder
 from kraken.core.objects.attributes.attribute_group import AttributeGroup
+from kraken.core.objects.attributes.bool_attribute import BoolAttribute
+
+from kraken.core.objects.constraints.constraint import Constraint
+from kraken.core.objects.constraints.orientation_constraint import OrientationConstraint
+from kraken.core.objects.constraints.pose_constraint import PoseConstraint
+from kraken.core.objects.constraints.position_constraint import PositionConstraint
+from kraken.core.objects.constraints.scale_constraint import ScaleConstraint
+from kraken.core.objects.operators.operator import Operator
 
 
 class Object3D(SceneItem):
@@ -19,7 +27,6 @@ class Object3D(SceneItem):
 
     def __init__(self, name, parent=None):
         super(Object3D, self).__init__(name, parent)
-        self._component = None
         self._children = []
         self._flags = {}
         self._attributeGroups = []
@@ -27,8 +34,15 @@ class Object3D(SceneItem):
         self._xfo = Xfo()
         self._ro = RotationOrder()
         self._color = None
-        self._visibility = True
-        self._shapeVisibility = True
+
+        self._implicitAttrGrp = AttributeGroup("implicitAttrGrp", self)
+        self._visibility = BoolAttribute('visibility',
+                                         True,
+                                         self._implicitAttrGrp)
+
+        self._shapeVisibility = BoolAttribute('ShapeVisibility',
+                                              True,
+                                              self._implicitAttrGrp)
 
         if parent is not None:
             parent.addChild(self)
@@ -42,12 +56,11 @@ class Object3D(SceneItem):
         """Gets xfo property of this Object3D.
 
         Returns:
-            float: Xfo property of this Object3D.
+            Xfo: Xfo property of this Object3D.
 
         """
 
         return self._xfo
-
 
     @xfo.setter
     def xfo(self, value):
@@ -55,15 +68,16 @@ class Object3D(SceneItem):
 
         Note:
             In Python, objects are always referenced, meaning to get a unique
-            instance, an explicit clone is required. In KL, structs are passed by
-            value, meaning that every assignment of a struct causes a clone.
+            instance, an explicit clone is required. In KL, structs are passed
+            by value, meaning that every assignment of a struct causes a clone.
 
-            This means that in KL it is impossible for 2 objects to reference the
-            same KL math object. This is an important performance feature of KL.
+            This means that in KL it is impossible for 2 objects to reference
+            the same KL math object. This is an important performance feature
+            of KL.
 
-            The members of the KL Math objects have this property. 2 Xfos cannot
-            share the same tr value. Here we implcitly clone the math object to
-            ensure the same behavior as in KL.
+            The members of the KL Math objects have this property. 2 Xfos
+            cannot share the same tr value. Here we implcitly clone the math
+            object to ensure the same behavior as in KL.
 
         Args:
             value (Xfo): Vector to set the xfo by.
@@ -83,12 +97,11 @@ class Object3D(SceneItem):
         """Gets Rotation Order property of this Object3D.
 
         Returns:
-            float: Rotation Order property of this Object3D.
+            RotationOrder: Rotation Order property of this Object3D.
 
         """
 
         return self._ro
-
 
     @ro.setter
     def ro(self, value):
@@ -96,15 +109,16 @@ class Object3D(SceneItem):
 
         Note:
             In Python, objects are always referenced, meaning to get a unique
-            instance, an explicit clone is required. In KL, structs are passed by
-            value, meaning that every assignment of a struct causes a clone.
+            instance, an explicit clone is required. In KL, structs are passed
+            by value, meaning that every assignment of a struct causes a clone.
 
-            This means that in KL it is impossible for 2 objects to reference the
-            same KL math object. This is an important performance feature of KL.
+            This means that in KL it is impossible for 2 objects to reference
+            the same KL math object. This is an important performance feature
+            of KL.
 
-            The members of the KL Math objects have this property. 2 Xfos cannot
-            share the same tr value. Here we implcitly clone the math object to
-            ensure the same behavior as in KL.
+            The members of the KL Math objects have this property. 2 Xfos
+            cannot share the same tr value. Here we implcitly clone the math
+            object to ensure the same behavior as in KL.
 
         Args:
             value (RotationOrder): New rotation order.
@@ -118,12 +132,48 @@ class Object3D(SceneItem):
 
         return True
 
+    @property
+    def localXfo(self):
+        """Gets local transform of this Object3D
 
+        Returns:
+            Xfo: Local Xfo of the object.
+
+        """
+
+        globalXfo = self.globalXfo
+
+        parent = self.getParent()
+        if not isinstance(parent, SceneItem):
+            return globalXfo
+
+        parentXfo = parent.globalXfo
+
+        return parentXfo.inverse().multiply(globalXfo)
+
+    @property
+    def globalXfo(self):
+        """Gets global transform of this Object3D
+
+        Returns:
+            Xfo: Global Xfo
+
+        """
+
+        for source in self.getSources():
+            if isinstance(source, Object3D):
+                continue
+            if isinstance(source, Constraint):
+                return source.compute()
+            if isinstance(source, Operator):
+                source.evaluate()
+                break
+
+        return self._xfo
 
     # =============
     # Name Methods
     # =============
-
     def getBuildName(self):
         """Returns the build name for the object.
 
@@ -137,8 +187,9 @@ class Object3D(SceneItem):
         config = Config.getInstance()
 
         # If flag is set on object to use explicit name, return it.
-        if config.getExplicitNaming() is True or self.testFlag('EXPLICIT_NAME'):
-            return self.getName()
+        if config.getExplicitNaming() is True or \
+                self.testFlag('EXPLICIT_NAME'):
+                return self.getName()
 
         nameTemplate = config.getNameTemplate()
 
@@ -206,7 +257,8 @@ class Object3D(SceneItem):
                 builtName += self.getContainer().getName()
 
             else:
-                raise ValueError("Unresolvabled token '" + token + "' used on: " + self.getPath())
+                raise ValueError("Unresolvabled token '" + token +
+                    "' used on: " + self.getPath())
 
         return builtName
 
@@ -229,7 +281,7 @@ class Object3D(SceneItem):
             collision = True
             while collision:
                 child = self.getParent().getChildByDecoratedName(name + self.getNameDecoration())
-                collision = child != None and child is not self
+                collision = child is not None and child is not self
                 if not collision:
                     break
 
@@ -245,7 +297,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     # ==================
     # Hierarchy Methods
     # ==================
@@ -258,11 +309,11 @@ class Object3D(SceneItem):
         """
 
         parent = self.getParent()
-        while (parent is not None and 'Container' not in parent.getTypeHierarchyNames()):
+        while (parent is not None and 'Container' not in
+               parent.getTypeHierarchyNames()):
             parent = parent.getParent()
 
         return parent
-
 
     def getLayer(self):
         """Returns the Layer the object belongs to.
@@ -277,37 +328,6 @@ class Object3D(SceneItem):
             parent = parent.getParent()
 
         return parent
-
-
-    # ==================
-    # Component Methods
-    # ==================
-    def getComponent(self):
-        """Returns the component of the object as an object.
-
-        Returns:
-            Object: Component of this object.
-
-        """
-
-        return self._component
-
-
-    def setComponent(self, component):
-        """Sets the component attribute of this object.
-
-        Args:
-            component (Object): Object that is the component of this one.
-
-        Returns:
-            bool: True if successful.
-
-        """
-
-        self._component = component
-
-        return True
-
 
     # ==============
     # Child Methods
@@ -326,7 +346,6 @@ class Object3D(SceneItem):
 
         return False
 
-
     def _checkChildIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -336,10 +355,10 @@ class Object3D(SceneItem):
         """
 
         if index > len(self.getChildren()):
-            raise IndexError("'" + str(index) + "' is out of the range of the 'children' array.")
+            raise IndexError("'" + str(index) +
+                             "' is out of the range of the 'children' array.")
 
         return True
-
 
     def addChild(self, child):
         """Adds a child to this object.
@@ -360,15 +379,17 @@ class Object3D(SceneItem):
             if child in parent.getChildren():
                 parent.getChildren().remove(child)
 
+
         # check for name collision and adjust the name if they exist
         # Increment name if it already exists
         initName = child.getName()
         name = initName
         suffix = 1
 
-        while self.getChildByDecoratedName(name + child.getNameDecoration()) != None:
+        while self.getChildByDecoratedName(name + child.getNameDecoration()) is not None:
             name = initName + str(suffix).zfill(2)
             suffix += 1
+
         if initName != name:
             child.setName(name)
 
@@ -380,7 +401,6 @@ class Object3D(SceneItem):
             child.setComponent(self._component)
 
         return True
-
 
     def removeChildByIndex(self, index):
         """Removes a child from this object by index.
@@ -400,7 +420,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     def removeChildByName(self, name):
         """Removes a child from this object by name.
 
@@ -419,12 +438,12 @@ class Object3D(SceneItem):
                 removeIndex = i
 
         if removeIndex is None:
-            raise ValueError("'" + name + "' is not a valid child of this object.")
+            raise ValueError("'" + name +
+                             "' is not a valid child of this object.")
 
         self.removeChildByIndex(removeIndex)
 
         return True
-
 
     def removeChild(self, child):
         """Removed the child as an child item of this object.
@@ -436,11 +455,13 @@ class Object3D(SceneItem):
 
         try:
             self._children.remove(child)
-        except Exception as e:
+        except:
             names = []
             for c in self._children:
                 names.append(c.getName())
-            raise Exception("Object '"+self.getPath() + "' does not have child:"+child.getPath() + ". it does have:" + str(names))
+            raise Exception("Object '" + self.getPath() +
+                            "' does not have child:" + child.getPath() +
+                            ". it does have:" + str(names))
 
         child.setParent(None)
 
@@ -450,7 +471,37 @@ class Object3D(SceneItem):
 
         return True
 
+    def getDescendents(self, nodeList=None, classType=None, inheritedClass=False):
+        """Gets the children of this object.
 
+        Args:
+            nodeList: (list): optional list to append children to
+            classType (str): Name of the type of class to limit the search to
+            inheritedClass (bool): Match nodes that is a sub-class of type.
+
+        Returns:
+            list: Child objects.
+
+        """
+
+        if nodeList is None:
+            nodeList = []
+
+        for child in self._children:
+                if classType is not None:
+                    if inheritedClass is not None and child.isTypeOf(classType):
+                        nodeList.append(child)
+                    elif child.getTypeName() == classType:
+                        nodeList.append(child)
+
+                else:
+                    nodeList.append(child)
+
+                child.getDescendents(classType=classType,
+                                     nodeList=nodeList,
+                                     inheritedClass=inheritedClass)
+
+        return nodeList
 
     def getChildren(self):
         """Gets the children of this object.
@@ -462,7 +513,6 @@ class Object3D(SceneItem):
 
         return self._children
 
-
     def getNumChildren(self):
         """Returns the number of children this object has.
 
@@ -472,7 +522,6 @@ class Object3D(SceneItem):
         """
 
         return len(self.getChildren())
-
 
     def getChildByIndex(self, index):
         """Returns the child object at specified index.
@@ -489,7 +538,6 @@ class Object3D(SceneItem):
             return False
 
         return self.getChildren()[index]
-
 
     def getChildByName(self, name):
         """Returns the child object with the specified name.
@@ -508,7 +556,6 @@ class Object3D(SceneItem):
 
         return None
 
-
     def getChildByDecoratedName(self, decoratedName):
         """Returns the child object with the specified name.
 
@@ -525,7 +572,6 @@ class Object3D(SceneItem):
                 return eachChild
 
         return None
-
 
     def getChildrenByType(self, childType):
         """Returns all children that are of the specified type.
@@ -545,7 +591,6 @@ class Object3D(SceneItem):
 
         return childrenOfType
 
-
     # =============
     # Flag Methods
     # =============
@@ -561,7 +606,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     def testFlag(self, name):
         """Tests if the specified flag is set.
 
@@ -573,11 +617,7 @@ class Object3D(SceneItem):
 
         """
 
-        if name in self._flags:
-            return True
-
-        return False
-
+        return name in self._flags
 
     def clearFlag(self, name):
         """Clears the flag of the specified name.
@@ -596,7 +636,6 @@ class Object3D(SceneItem):
 
         return False
 
-
     # ========================
     # Attribute Group Methods
     # ========================
@@ -612,7 +651,8 @@ class Object3D(SceneItem):
         """
 
         if index > len(self._attributeGroups):
-            raise IndexError("'" + str(index) + "' is out of the range of 'attributeGroups' array.")
+            raise IndexError("'" + str(index) +
+                             "' is out of the range of 'attributeGroups' array.")
 
         return True
 
@@ -621,7 +661,8 @@ class Object3D(SceneItem):
         """Adds an attributeGroup to this object.
 
         Args:
-            attributeGroup (Object): Attribute Group object to add to this object.
+            attributeGroup (Object): Attribute Group object to add to this
+                object.
 
         Returns:
             bool: True if successful.
@@ -629,13 +670,13 @@ class Object3D(SceneItem):
         """
 
         if attributeGroup.getName() in [x.getName() for x in self._attributeGroups]:
-            raise IndexError("Child with " + attributeGroup.getName() + " already exists as a attributeGroup.")
+            raise IndexError("Child with " + attributeGroup.getName() +
+                             " already exists as a attributeGroup.")
 
         self._attributeGroups.append(attributeGroup)
         attributeGroup.setParent(self)
 
         return True
-
 
     def removeAttributeGroupByIndex(self, index):
         """Removes attribute at specified index.
@@ -654,7 +695,6 @@ class Object3D(SceneItem):
         del self._attributeGroups[index]
 
         return True
-
 
     def removeAttributeGroupByName(self, name):
         """Removes the attribute with the specified name.
@@ -680,7 +720,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     def getNumAttributeGroups(self):
         """Returns the number of attributeGroups as an integer.
 
@@ -690,7 +729,6 @@ class Object3D(SceneItem):
         """
 
         return len(self._attributeGroups)
-
 
     def getAttributeGroupByIndex(self, index):
         """Returns the attribute at the specified index.
@@ -707,7 +745,6 @@ class Object3D(SceneItem):
             return False
 
         return self._attributeGroups[index]
-
 
     def getAttributeGroupByName(self, name):
         """Return the attribute group with the specified name.
@@ -726,7 +763,6 @@ class Object3D(SceneItem):
 
         return None
 
-
     # ===================
     # Constraint Methods
     # ===================
@@ -742,10 +778,64 @@ class Object3D(SceneItem):
         """
 
         if index > len(self._constraints):
-            raise IndexError("'" + str(index) + "' is out of the range of 'constraints' array.")
+            raise IndexError("'" + str(index) +
+                             "' is out of the range of 'constraints' array.")
 
         return True
 
+    def constrainTo(self, constrainers, constraintType="Pose", maintainOffset=False, name=None):
+        """Adds an constraint to this object.
+
+        Args:
+            constrainers (Object or Object list): Constraint object to add to
+                this object or objects.
+            constraintType (str): String name of the constraint type.
+            maintainOffset (bool): Sets the constraint to maintain offset when
+                creating the constraint.
+            name (str): Name of the constraint. If set to None, a name is
+                automatically generated.
+
+        Returns:
+            string: Constraint object
+
+        """
+
+        if name is None:
+            constraintName = ""
+            if hasattr(constrainers, '__iter__'):
+                constraintName = '_'.join([self.getName(), 'To', constrainers[0].getName(), constraintType + 'Constraint'])
+            else:
+                constraintName = '_'.join([self.getName(), 'To', constrainers.getName(), constraintType + 'Constraint'])
+        else:
+            constraintName = name
+
+        constraint = None
+        if constraintType == "Orientation":
+            constraint = OrientationConstraint(constraintName)
+        elif constraintType == "Pose":
+            constraint = PoseConstraint(constraintName)
+        elif constraintType == "Position":
+            constraint = PositionConstraint(constraintName)
+        elif constraintType == "Scale":
+            constraint = ScaleConstraint(constraintName)
+        else:
+            raise ValueError("'" + constraintType +
+                "' is not a valid constraint type. Valid types are Orientation, Pose, Position, or Scale")
+
+        # Accept a single object or a list of objects
+        if hasattr(constrainers, '__iter__'):
+            pass
+        else:
+            constrainers = [constrainers]
+
+        for constrainer in constrainers:
+            constraint.addConstrainer(constrainer)
+
+        constraint.setMaintainOffset(maintainOffset)
+
+        self.addConstraint(constraint)
+
+        return constraint
 
     def addConstraint(self, constraint):
         """Adds an constraint to this object.
@@ -759,14 +849,15 @@ class Object3D(SceneItem):
         """
 
         if constraint.getName() in [x.getName() for x in self._constraints]:
-            raise IndexError("Constraint with name '" + constraint.getName() + "'' already exists as a constraint.")
+            raise IndexError("Constraint with name '" + constraint.getName() +
+                             "'' already exists as a constraint.")
 
         self._constraints.append(constraint)
+
         constraint.setParent(self)
         constraint.setConstrainee(self)
 
         return True
-
 
     def removeConstraintByIndex(self, index):
         """Removes constraint at specified index.
@@ -785,7 +876,6 @@ class Object3D(SceneItem):
         del self._constraints[index]
 
         return True
-
 
     def removeConstraintByName(self, name):
         """Removes the constraint with the specified name.
@@ -811,6 +901,17 @@ class Object3D(SceneItem):
 
         return True
 
+    def removeAllConstraints(self):
+        """Removes all of the constraints for this object.
+
+        Returns:
+            bool: True if successful.
+
+        """
+
+        del self._constraints[:]
+
+        return True
 
     def getNumConstraints(self):
         """Returns the number of constraints as an integer.
@@ -821,7 +922,6 @@ class Object3D(SceneItem):
         """
 
         return len(self._constraints)
-
 
     def getConstraintByIndex(self, index):
         """Returns the constraint at the specified index.
@@ -838,7 +938,6 @@ class Object3D(SceneItem):
             return False
 
         return self._constraints[index]
-
 
     def getConstraintByName(self, name):
         """Return the constraint group with the specified name.
@@ -857,10 +956,19 @@ class Object3D(SceneItem):
 
         return None
 
-
     # ===================
     # Visibility Methods
     # ===================
+    def getVisibilityAttr(self):
+        """Returns the Visibility attribute object.
+
+        Returns:
+            BoolAttribute: Attribute that holds the value of the visibility.
+
+        """
+
+        return self._visibility
+
     def getVisibility(self):
         """Returns the visibility status of the scene item.
 
@@ -869,8 +977,7 @@ class Object3D(SceneItem):
 
         """
 
-        return self._visibility
-
+        return self._visibility.getValue()
 
     def setVisibility(self, value):
         """Sets the visibility of the scene object.
@@ -883,10 +990,20 @@ class Object3D(SceneItem):
 
         """
 
-        self._visibility = value
+        self._visibility.setValue(value)
 
         return True
 
+    def getShapeVisibilityAttr(self):
+        """Returns the Shape Visibility attribute object.
+
+        Returns:
+            BoolAttribute: Attribute that holds the value of the shape
+                visibility.
+
+        """
+
+        return self._shapeVisibility
 
     def getShapeVisibility(self):
         """Returns the shape visibility status of the scene item.
@@ -896,8 +1013,7 @@ class Object3D(SceneItem):
 
         """
 
-        return self._shapeVisibility
-
+        return self._shapeVisibility.getValue()
 
     def setShapeVisibility(self, value):
         """Sets the shape visibility of the scene object.
@@ -910,10 +1026,9 @@ class Object3D(SceneItem):
 
         """
 
-        self._shapeVisibility = value
+        self._shapeVisibility.setValue(value)
 
         return True
-
 
     # ================
     # Display Methods
@@ -933,7 +1048,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     def getColor(self):
         """Returns the color of the object.
 
@@ -943,7 +1057,6 @@ class Object3D(SceneItem):
         """
 
         return self._color
-
 
     # ==========================
     # Parameter Locking Methods
@@ -972,7 +1085,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     def lockScale(self, x=False, y=False, z=False):
         """Sets flags for locking scale parameters.
 
@@ -997,7 +1109,6 @@ class Object3D(SceneItem):
 
         return True
 
-
     def lockTranslation(self, x=False, y=False, z=False):
         """Sets flags for locking translation parameters.
 
@@ -1021,7 +1132,6 @@ class Object3D(SceneItem):
             self.setFlag("lockZTranslation")
 
         return True
-
 
     # ====================
     # Persistence Methods
@@ -1070,7 +1180,6 @@ class Object3D(SceneItem):
 
         return jsonData
 
-
     def jsonDecode(self, loader, jsonData):
         """Returns the color of the object..
 
@@ -1083,19 +1192,20 @@ class Object3D(SceneItem):
 
         """
 
-        self._flags =  jsonData['flags']
-        self.xfo =  loader.decodeValue(jsonData['xfo'])
+        self._flags = jsonData['flags']
+        self.xfo = loader.decodeValue(jsonData['xfo'])
         if 'color' in jsonData and jsonData['color'] is not None:
             self.setColor(loader.decodeValue(jsonData['color']))
-        self._visibility =  jsonData['visibility']
-        self._shapeVisibility =  jsonData['shapeVisibility']
+        self._visibility = jsonData['visibility']
+        self._shapeVisibility = jsonData['shapeVisibility']
 
         for child in jsonData['children']:
             self.addChild(loader.construct(child))
 
         for attrGroup in jsonData['attributeGroups']:
             # There is one default attribute group assigned to each scene item.
-            # Load data into the existing item instead of constructing a new one.
+            # Load data into the existing item instead of constructing a new
+            # one.
             if attrGroup['name'] == '':
                 loader.registerItem(self._attributeGroups[0])
                 self._attributeGroups[0].jsonDecode(loader, attrGroup)

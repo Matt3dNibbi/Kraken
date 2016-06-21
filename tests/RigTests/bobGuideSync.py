@@ -29,7 +29,7 @@ def buildBob(mode='guide'):
         builder.build(bobRig)
 
     else:
-        LogMessage('Invalid mode set')
+        print 'Invalid mode set'
 
     Profiler.getInstance().pop()
 

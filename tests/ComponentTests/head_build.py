@@ -1,7 +1,7 @@
 
 from kraken import plugins
-from kraken.core.maths import Vec3
-from kraken_examples.head_component import HeadComponentGuide, HeadComponentRig
+from kraken.core.maths import *
+from kraken_components.biped.head_component import HeadComponentGuide, HeadComponentRig
 
 from kraken.core.profiler import Profiler
 from kraken.helpers.utility_methods import logHierarchy
@@ -10,15 +10,13 @@ from kraken.helpers.utility_methods import logHierarchy
 Profiler.getInstance().push("head_build")
 
 headGuide = HeadComponentGuide("head")
+
 headGuide.loadData({
-                    "name": "Head",
-                    "location": "M",
-                    "headPosition": Vec3(0.0, 17.4756, -0.421),
-                    "headEndPosition": Vec3(0.0, 19.5, -0.421),
-                    "eyeLeftPosition": Vec3(0.3497, 18.0878, 0.6088),
-                    "eyeRightPosition": Vec3(-0.3497, 18.0878, 0.6088),
-                    "jawPosition": Vec3(0.0, 17.613, -0.2731)
-                   })
+    "headXfo": Xfo(Vec3(0.0, 17.5, -0.5)),
+    "eyeLeftXfo": Xfo(tr=Vec3(0.375, 18.5, 0.5), ori=Quat(Vec3(-0.0, -0.707106769085, -0.0), 0.707106769085)),
+    "eyeRightXfo": Xfo(tr=Vec3(-0.375, 18.5, 0.5), ori=Quat(Vec3(-0.0, -0.707106769085, -0.0), 0.707106769085)),
+    "jawXfo": Xfo(Vec3(0.0, 17.875, -0.275))
+})
 
 # Save the hand guide data for persistence.
 saveData = headGuide.saveData()
@@ -36,4 +34,8 @@ Profiler.getInstance().pop()
 if __name__ == "__main__":
     print Profiler.getInstance().generateReport()
 else:
-    logHierarchy(head)
+    for each in head.getItems().values():
+        # Only log hierarchy for Layer objects as Layers in this test are added to
+        # the component since there is no rig object.
+        if each.isTypeOf('Layer'):
+            logHierarchy(each)

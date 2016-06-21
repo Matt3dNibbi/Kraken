@@ -69,7 +69,7 @@ class Synchronizer(Synchronizer):
             kObject (object): Object to sync the xfo for.
 
         Returns:
-            bool: True if successful.
+            Boolean: True if successful.
 
         """
 
@@ -83,7 +83,7 @@ class Synchronizer(Synchronizer):
 
         if dccItem is None:
             print "Warning Syncing. No DCC Item for :" + kObject.getPath()
-            return
+            return False
 
         dccPos = dccItem.getTranslation(space='world')
         dccQuat = dccItem.getRotation(space='world', quaternion=True).get()
@@ -91,7 +91,12 @@ class Synchronizer(Synchronizer):
 
         pos = Vec3(x=dccPos[0], y=dccPos[1], z=dccPos[2])
         quat = Quat(v=Vec3(dccQuat[0], dccQuat[1], dccQuat[2]), w=dccQuat[3])
-        scl = Vec3(x=dccScl[0], y=dccScl[1], z=dccScl[2])
+
+        # If flag is set, pass the DCC Scale values.
+        if kObject.testFlag('SYNC_SCALE') is True:
+            scl = Vec3(x=dccScl[0], y=dccScl[1], z=dccScl[2])
+        else:
+            scl = Vec3(1.0, 1.0, 1.0)
 
         newXfo = Xfo(tr=pos, ori=quat, sc=scl)
 
@@ -110,6 +115,11 @@ class Synchronizer(Synchronizer):
             bool: True if successful.
 
         """
+
+        if kObject.getParent() is not None and kObject.isTypeOf('AttributeGroup'):
+            if kObject.getParent().getParent().isTypeOf('Component'):
+                if kObject.getParent().getParent().getComponentType() == "Guide":
+                    return False
 
         hrcMap = self.getHierarchyMap()
 

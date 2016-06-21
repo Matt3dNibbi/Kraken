@@ -5,8 +5,10 @@ Constraint - Base Constraint.
 
 """
 
+from kraken.core.kraken_system import ks
 from kraken.core.objects.scene_item import SceneItem
-from kraken.core.objects.object_3d import Object3D
+from kraken.core.maths.xfo import Xfo
+from kraken.core.maths.mat44 import Mat44
 
 
 class Constraint(SceneItem):
@@ -19,6 +21,17 @@ class Constraint(SceneItem):
         self._constrainers = []
         self._maintainOffset = False
 
+    # ===============
+    # Source Methods
+    # ===============
+    def getSources(self):
+        """Returns the sources of the object.
+
+        Returns:
+            list: All sources of this object.
+
+        """
+        return super(Constraint, self).getSources() + self._constrainers
 
     # ===================
     # Constraint Methods
@@ -61,6 +74,7 @@ class Constraint(SceneItem):
         """
 
         self._constrainee = constrainee
+        self._constrainee.addSource(self)
 
         return True
 
@@ -105,13 +119,15 @@ class Constraint(SceneItem):
 
         """
 
-        if not isinstance(kObject3D, Object3D):
-            raise Exception("'kObject3D' argument is not a valid instance type. '"
-                             + kObject3D.getName() + "': " + str(type(kObject3D)) +
-                             ". Must be an instance of 'Object3D'.")
+        if not kObject3D.isTypeOf('Object3D'):
+            raise Exception("'kObject3D' argument is not a valid instance type. '" +
+                            kObject3D.getName() + "': " + str(type(kObject3D)) +
+                            ". Must be an instance of 'Object3D'.")
+
 
         if kObject3D in self._constrainers:
-            raise Exception("'kObject3D' argument is already a constrainer: '" + kObject3D.getName() + "'.")
+            raise Exception("'kObject3D' argument is already a constrainer: '" +
+                            kObject3D.getName() + "'.")
 
         self._constrainers[index] = kObject3D
 
@@ -143,9 +159,75 @@ class Constraint(SceneItem):
         return self._constrainers
 
 
-    # ================
+    def compute(self):
+        """invokes the constraint and returns the resulting transform
+
+        Returns:
+            xfo: The result of the constraint in global space.
+
+        """
+
+        if self._constrainee is None:
+            return None
+        if len(self._constrainers) == 0:
+            return None
+        if self.getMaintainOffset():
+            return self._constrainee.xfo
+
+        cls = self.__class__.__name__
+        ks.loadExtension('KrakenForCanvas')
+        rtVal = ks.rtVal('Kraken%s' % cls)
+
+        for c in self._constrainers:
+            rtVal.addConstrainer('', ks.rtVal('Xfo', c.globalXfo).toMat44('Mat44'))
+
+        # Using globalXfo here would cause a recursion
+        return Xfo(rtVal.compute("Xfo",
+                                 ks.rtVal('Xfo', self._constrainee.xfo).toMat44('Mat44')))
+
+    def computeOffset(self):
+        """Invokes the constraint and computes the offset
+
+        Returns:
+            xfo: The offset to be used for the constraint.
+
+        """
+
+        if self._constrainee is None:
+            return Xfo()
+        if len(self._constrainers) == 0:
+            return Xfo()
+        if not self.getMaintainOffset():
+            return Xfo()
+
+        cls = self.__class__.__name__
+        ks.loadExtension('KrakenForCanvas')
+        rtVal = ks.rtVal('Kraken%s' % cls)
+
+        rtVal.offset = ks.rtVal('Mat44', Mat44())
+        for c in self._constrainers:
+            rtVal.addConstrainer('', ks.rtVal('Xfo', c.globalXfo).toMat44('Mat44'))
+
+        return Xfo(rtVal.computeOffset("Xfo",
+                                       ks.rtVal('Xfo', self._constrainee.xfo).toMat44('Mat44')))
+
+    def evaluate(self):
+        """Invokes the constraint causing the output value to be computed.
+
+        Returns:
+            bool: True if successful.
+
+        """
+
+        if self.getMaintainOffset() is False:
+            self.getConstrainee().xfo = self.compute()
+            return True
+
+        return False
+
+    # ====================
     # Persistence Methods
-    # ================
+    # ====================
     def jsonEncode(self, saver):
         """Encodes the object to a JSON structure.
 
@@ -160,7 +242,7 @@ class Constraint(SceneItem):
         classHierarchy = []
         for cls in type.mro(type(self)):
             if cls == object:
-                break;
+                break
             classHierarchy.append(cls.__name__)
 
         jsonData = {
@@ -173,7 +255,6 @@ class Constraint(SceneItem):
             jsonData['constrainers'].append(cnstrnr.getName())
 
         return jsonData
-
 
     def jsonDecode(self, loader, jsonData):
         """Returns the color of the object..

@@ -143,6 +143,25 @@ class Color(MathObject):
         return self._rtval.a.getSimpleType()
 
 
+    def __eq__(self, other):
+        return self.equal(other)
+
+    def __ne__(self, other):
+        return not self.equal(other)
+
+    def __add__(self, other):
+        return self.add(other)
+
+    def __sub__(self, other):
+        return self.subtract(other)
+
+    def __mul__(self, other):
+        return self.multiply(other)
+
+    def __div__(self, other):
+        return self.divide(other)
+
+
     @g.setter
     def a(self, value):
         """Sets a channel from the input channel.
@@ -166,10 +185,10 @@ class Color(MathObject):
 
         """
 
-        color = Color();
-        color.r = self.r;
-        color.g = self.g;
-        color.b = self.b;
+        color = Color()
+        color.r = self.r
+        color.g = self.g
+        color.b = self.b
         return color
 
 
@@ -204,8 +223,7 @@ class Color(MathObject):
 
         """
 
-        return self._rtval.set('Boolean', other._rtval).getSimpleType()
-
+        return self._rtval.equal('Boolean', other._rtval).getSimpleType()
 
 
     def almostEqual(self, other, precision):
@@ -361,13 +379,13 @@ class Color(MathObject):
             Example:
 
                 # Generate a regular random color
-                color = randomColor(seed);
+                color = randomColor(seed)
 
                 # Generate a light random color
-                color = randomColor(seed, 0.5);
+                color = randomColor(seed, 0.5)
 
                 # Generate a dark random color
-                color = randomColor(seed, -0.5);
+                color = randomColor(seed, -0.5)
 
         Args:
             gammaAdjustment (float): A gamma adjustment to offset the range of the generated color.
@@ -377,7 +395,7 @@ class Color(MathObject):
 
         """
         def lerp( val1, val2, t):
-            return val1 + ((val2 - val1) * t);
+            return val1 + ((val2 - val1) * t)
 
         if(gammaAdjustment > 0.0001):
             # Generate a light color with values between gammaAdjustment and 1.0

@@ -3,6 +3,7 @@
 #
 
 import copy
+import math
 
 from PySide import QtGui, QtCore
 
@@ -11,6 +12,11 @@ from connection import Connection
 
 from selection_rect import SelectionRect
 
+MANIP_MODE_NONE = 0
+MANIP_MODE_SELECT = 1
+MANIP_MODE_PAN = 2
+MANIP_MODE_MOVE = 3
+MANIP_MODE_ZOOM = 4
 
 class GraphView(QtGui.QGraphicsView):
 
@@ -63,7 +69,7 @@ class GraphView(QtGui.QGraphicsView):
 
         # Explicitly set the scene rect. This ensures all view parameters will be explicitly controlled
         # in the event handlers of this class.
-        size = QtCore.QSize(600, 400);
+        size = QtCore.QSize(600, 400)
         self.resize(size)
         self.setSceneRect(-size.width() * 0.5, -size.height() * 0.5, size.width(), size.height())
 
@@ -84,7 +90,7 @@ class GraphView(QtGui.QGraphicsView):
         self.__nodes = {}
         self.__selection = set()
 
-        self._manipulationMode = 0
+        self._manipulationMode = MANIP_MODE_NONE
         self._selectionRect = None
 
     def getGridSize(self):
@@ -367,7 +373,7 @@ class GraphView(QtGui.QGraphicsView):
             raise Exception("Invalid srcNode:" + str(srcNode))
 
 
-        sourcePort = sourceNode.getPort(outputName)
+        sourcePort = sourceNode.getOutputPort(outputName)
         if not sourcePort:
             raise Exception("Node '" + sourceNode.getName() + "' does not have output:" + outputName)
 
@@ -381,7 +387,7 @@ class GraphView(QtGui.QGraphicsView):
         else:
             raise Exception("Invalid tgtNode:" + str(tgtNode))
 
-        targetPort = targetNode.getPort(inputName)
+        targetPort = targetNode.getInputPort(inputName)
         if not targetPort:
             raise Exception("Node '" + targetNode.getName() + "' does not have input:" + inputName)
 
@@ -397,29 +403,66 @@ class GraphView(QtGui.QGraphicsView):
 
         if event.button() is QtCore.Qt.MouseButton.LeftButton and self.itemAt(event.pos()) is None:
             self.beginNodeSelection.emit()
-            self._manipulationMode = 1
+            self._manipulationMode = MANIP_MODE_SELECT
             self._mouseDownSelection = copy.copy(self.getSelectedNodes())
-            self.clearSelection(emitSignal=False)
             self._selectionRect = SelectionRect(graph=self, mouseDownPos=self.mapToScene(event.pos()))
 
         elif event.button() is QtCore.Qt.MouseButton.MiddleButton:
-
             self.setCursor(QtCore.Qt.OpenHandCursor)
-            self._manipulationMode = 2
+            self._manipulationMode = MANIP_MODE_PAN
             self._lastPanPoint = self.mapToScene(event.pos())
+
+        elif event.button() is QtCore.Qt.MouseButton.RightButton:
+            self.setCursor(QtCore.Qt.SizeHorCursor)
+            self._manipulationMode = MANIP_MODE_ZOOM
+            self._lastZoomPoint = self.mapToScene(event.pos())
+            self._lastTransform = QtGui.QTransform(self.transform())
 
         else:
             super(GraphView, self).mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._manipulationMode == 1:
+        modifiers = QtGui.QApplication.keyboardModifiers()
+
+        if self._manipulationMode == MANIP_MODE_SELECT:
             dragPoint = self.mapToScene(event.pos())
             self._selectionRect.setDragPoint(dragPoint)
-            for name, node in self.__nodes.iteritems():
-                if not node.isSelected() and self._selectionRect.collidesWithItem(node):
-                    self.selectNode(node, emitSignal=False)
 
-        elif self._manipulationMode == 2:
+            # This logic allows users to use ctrl and shift with rectangle
+            # select to add / remove nodes.
+            if modifiers == QtCore.Qt.ControlModifier:
+                for name, node in self.__nodes.iteritems():
+
+                    if node in self._mouseDownSelection:
+                        if node.isSelected() and self._selectionRect.collidesWithItem(node):
+                            self.deselectNode(node, emitSignal=False)
+                        elif not node.isSelected() and not self._selectionRect.collidesWithItem(node):
+                            self.selectNode(node, emitSignal=False)
+                    else:
+                        if not node.isSelected() and self._selectionRect.collidesWithItem(node):
+                            self.selectNode(node, emitSignal=False)
+                        elif node.isSelected() and not self._selectionRect.collidesWithItem(node):
+                            if node not in self._mouseDownSelection:
+                                self.deselectNode(node, emitSignal=False)
+
+            elif modifiers == QtCore.Qt.ShiftModifier:
+                for name, node in self.__nodes.iteritems():
+                    if not node.isSelected() and self._selectionRect.collidesWithItem(node):
+                        self.selectNode(node, emitSignal=False)
+                    elif node.isSelected() and not self._selectionRect.collidesWithItem(node):
+                        if node not in self._mouseDownSelection:
+                            self.deselectNode(node, emitSignal=False)
+
+            else:
+                self.clearSelection(emitSignal=False)
+
+                for name, node in self.__nodes.iteritems():
+                    if not node.isSelected() and self._selectionRect.collidesWithItem(node):
+                        self.selectNode(node, emitSignal=False)
+                    elif node.isSelected() and not self._selectionRect.collidesWithItem(node):
+                        self.deselectNode(node, emitSignal=False)
+
+        elif self._manipulationMode == MANIP_MODE_PAN:
             delta = self.mapToScene(event.pos()) - self._lastPanPoint
 
             rect = self.sceneRect()
@@ -428,7 +471,7 @@ class GraphView(QtGui.QGraphicsView):
 
             self._lastPanPoint = self.mapToScene(event.pos())
 
-        elif self._manipulationMode == 3:
+        elif self._manipulationMode == MANIP_MODE_MOVE:
 
             newPos = self.mapToScene(event.pos())
             delta = newPos - self._lastDragPoint
@@ -440,14 +483,58 @@ class GraphView(QtGui.QGraphicsView):
             for node in selectedNodes:
                 node.translate(delta.x(), delta.y())
 
+        elif self._manipulationMode == MANIP_MODE_ZOOM:
+
+           # How much
+            delta = event.pos() - self._lastMousePos
+            zoomFactor = 1.0
+            if delta.x() > 0:
+                zoomFactor = 1.0 + delta.x() / 100.0
+            else:
+                zoomFactor = 1.0 / (1.0 + abs(delta.x()) / 100.0)
+
+            # Limit zoom to 3x
+            if self._lastTransform.m22() * zoomFactor >= 2.0:
+                return
+
+            # Reset to when we mouse pressed
+            self.setSceneRect(self._lastSceneRect)
+            self.setTransform(self._lastTransform)
+
+            # Center scene around mouse down
+            rect = self.sceneRect()
+            rect.translate(self._lastOffsetFromSceneCenter)
+            self.setSceneRect(rect)
+
+            # Zoom in (QGraphicsView auto-centers!)
+            self.scale(zoomFactor, zoomFactor)
+
+            newSceneCenter = self.sceneRect().center()
+            newScenePos = self.mapToScene(self._lastMousePos)
+            newOffsetFromSceneCenter = newScenePos - newSceneCenter
+
+            # Put mouse down back where is was on screen
+            rect = self.sceneRect()
+            rect.translate(-1 * newOffsetFromSceneCenter)
+            self.setSceneRect(rect)
+
+            # Call udpate to redraw background
+            self.update()
+
+
         else:
             super(GraphView, self).mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self._manipulationMode == 1:
+        if self._manipulationMode == MANIP_MODE_SELECT:
+
+            # If users simply clicks in the empty space, clear selection.
+            if self.mapToScene(event.pos()) == self._selectionRect.pos():
+                self.clearSelection(emitSignal=False)
+
             self._selectionRect.destroy()
             self._selectionRect = None
-            self._manipulationMode = 0
+            self._manipulationMode = MANIP_MODE_NONE
 
             selection = self.getSelectedNodes()
 
@@ -467,29 +554,49 @@ class GraphView(QtGui.QGraphicsView):
 
             self.endNodeSelection.emit()
 
-        elif self._manipulationMode == 2:
+        elif self._manipulationMode == MANIP_MODE_PAN:
             self.setCursor(QtCore.Qt.ArrowCursor)
-            self._manipulationMode = 0
+            self._manipulationMode = MANIP_MODE_NONE
+
+        elif self._manipulationMode == MANIP_MODE_ZOOM:
+            self.setCursor(QtCore.Qt.ArrowCursor)
+            self._manipulationMode = MANIP_MODE_NONE
+            #self.setTransformationAnchor(self._lastAnchor)
 
         else:
             super(GraphView, self).mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
 
-        (xfo, invRes) = self.transform().inverted()
-        topLeft = xfo.map(self.rect().topLeft())
-        bottomRight = xfo.map(self.rect().bottomRight())
-        center = ( topLeft + bottomRight ) * 0.5
 
         zoomFactor = 1.0 + event.delta() * self._mouseWheelZoomRate
 
         transform = self.transform()
-
         # Limit zoom to 3x
         if transform.m22() * zoomFactor >= 2.0:
             return
 
+        sceneCenter = self.sceneRect().center()
+        scenePoint = self.mapToScene(event.pos())
+        posFromSceneCenter = scenePoint - sceneCenter
+
+        rect = self.sceneRect()
+        rect.translate(posFromSceneCenter)
+        self.setSceneRect(rect)
+
+
+        # Zoom in (QGraphicsView auto-centers!)
         self.scale(zoomFactor, zoomFactor)
+
+         # Translate scene back to align original mouse presss
+        sceneCenter = self.sceneRect().center()
+        scenePoint = self.mapToScene(event.pos())
+        posFromSceneCenter = scenePoint - sceneCenter
+
+        rect = self.sceneRect()
+        rect.translate(-1 * posFromSceneCenter)
+        self.setSceneRect(rect)
+
 
         # Call udpate to redraw background
         self.update()

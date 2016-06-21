@@ -11,7 +11,7 @@ from mat33 import Mat33
 
 
 class Mat44(MathObject):
-    """3x3 Matrix object."""
+    """4x4 Matrix object."""
 
     def __init__(self, row0=None, row1=None, row2=None, row3=None):
         """Initialize and set values in the 3x3 matrix."""
@@ -161,6 +161,22 @@ class Mat44(MathObject):
         return True
 
 
+    def __eq__(self, other):
+        return self.equal(other)
+
+    def __ne__(self, other):
+        return not self.equal(other)
+
+    def __add__(self, other):
+        return self.add(other)
+
+    def __sub__(self, other):
+        return self.subtract(other)
+
+    def __mul__(self, other):
+        return self.multiply(other)
+
+
     def clone(self):
         """Returns a clone of the Mat44.
 
@@ -169,11 +185,11 @@ class Mat44(MathObject):
 
         """
 
-        mat44 = Mat44();
-        mat44.row0 = self.row0.clone();
-        mat44.row1 = self.row1.clone();
-        mat44.row2 = self.row2.clone();
-        mat44.row3 = self.row3.clone();
+        mat44 = Mat44()
+        mat44.row0 = self.row0.clone()
+        mat44.row1 = self.row1.clone()
+        mat44.row2 = self.row2.clone()
+        mat44.row3 = self.row3.clone()
 
         return mat44
 

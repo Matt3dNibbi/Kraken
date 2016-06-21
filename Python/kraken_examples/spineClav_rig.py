@@ -1,17 +1,21 @@
 from kraken.core.maths import Vec3, Quat, Xfo
 
 from kraken.core.objects.container import Container
-from kraken.core.objects.layer import Layer
 
-from kraken_examples.clavicle_component import ClavicleComponentGuide, ClavicleComponentRig
-from kraken_examples.spine_component import SpineComponentRig
+from kraken_components.biped.clavicle_component import ClavicleComponentGuide, ClavicleComponentRig
+from kraken_components.biped.spine_component import SpineComponentRig
 
 from kraken.core.profiler import Profiler
-from kraken.helpers.utility_methods import logHierarchy
 
 
 class SpineClavRig(Container):
-    """Spine Clav Rig"""
+    """Spine Clav Rig
+
+    This example demonstrates how users can create scripted rigs that both load
+    data onto a Rig class, and also loads data onto a guide class and pulls the
+    data off to the associated Rig class, then builds.
+
+    """
 
     def __init__(self, name):
 
@@ -29,13 +33,13 @@ class SpineClavRig(Container):
             'numDeformers': 4
         })
 
-        clavicleLeftComponentGuide = ClavicleComponentGuide("clavicleGuide",
-            data={
-                  "location": "L",
-                  "clavicleXfo": Xfo(Vec3(0.1322, 15.403, -0.5723)),
-                  "clavicleUpVXfo": Xfo(Vec3(0.0, 1.0, 0.0)),
-                  "clavicleEndXfo": Xfo(Vec3(2.27, 15.295, -0.753))
-                 })
+        clavicleLeftComponentGuide = ClavicleComponentGuide("clavicleGuide")
+        clavicleLeftComponentGuide.loadData({
+            "location": "L",
+            "clavicleXfo": Xfo(Vec3(0.1322, 15.403, -0.5723)),
+            "clavicleUpVXfo": Xfo(Vec3(0.0, 1.0, 0.0)),
+            "clavicleEndXfo": Xfo(Vec3(2.27, 15.295, -0.753))
+        })
 
         clavicleLeftComponent = ClavicleComponentRig("clavicle", self)
         clavicleLeftComponent.loadData(data=clavicleLeftComponentGuide.getRigBuildData())
@@ -43,7 +47,6 @@ class SpineClavRig(Container):
         # Clavicle to Spine
         vertebraeOutputs = spineComponent.getOutputByName('spineVertebrae')
         clavicleLeftSpineEndInput = clavicleLeftComponent.getInputByName('spineEnd')
-        clavicleLeftSpineEndInput.setConnection(vertebraeOutputs)
-        clavicleLeftSpineEndInput.setIndex(2)
+        clavicleLeftSpineEndInput.setConnection(vertebraeOutputs, index = 2)
 
         Profiler.getInstance().pop()

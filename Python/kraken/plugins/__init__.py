@@ -1,5 +1,7 @@
-import os
 import glob
+import logging
+import os
+import sys
 
 __all__ = [os.path.splitext(os.path.basename(plugin))[0]
            for path in __path__
@@ -31,7 +33,7 @@ def getBuilder():
         print "Failed to find DCC builder. Falling back to Python builder."
 
         from kraken.core import builder
-        dccBuilder = builder.Builder( debugMode = True )
+        dccBuilder = builder.Builder(debugMode=True)
 
     return dccBuilder
 
@@ -58,7 +60,7 @@ def getSynchronizer():
             dccSynchronizer = loaded_class()
 
     if dccSynchronizer is None:
-        print "Failed to find DCC inspector. Falling back to Python inspector."
+        print "Failed to find DCC Synchronizer. Falling back to Python Synchronizer."
 
         from kraken.core import synchronizer
         dccSynchronizer = synchronizer.Synchronizer()
@@ -66,31 +68,64 @@ def getSynchronizer():
     return dccSynchronizer
 
 
-def getLogger():
-    """Returns the appropriate log fn module for the DCC.
+def getLogHandler():
+    """Returns the appropriate logging handler for the DCC.
 
-    Return:
-    Function, function pointer for the DCC
+    Returns:
+        class: Instance of the log handler or None if not found.
 
     """
 
-    logger = None
+    handler = None
 
     for eachPlugin in __all__:
         mod = __import__("kraken.plugins." + eachPlugin, fromlist=['dccTest'])
         reload(mod)
 
         if mod.dccTest() is True:
-            loaded_mod = __import__("kraken.plugins." + eachPlugin + ".logger", fromlist=['logger'])
+            loaded_mod = __import__("kraken.plugins." + eachPlugin + ".log.handler", fromlist=['handler'])
             reload(loaded_mod)
-            loaded_class = getattr(loaded_mod, 'OutputLog')
+            loaded_class = getattr(loaded_mod, 'DCCHandler')
 
-            logger = loaded_class()
+            handler = loaded_class()
 
-    if logger is None:
-        print "Failed to find DCC logger. Falling back to Python logger."
+    if handler is None:
 
-        from logger import OutputLog
-        logger = OutputLog()
+        class DCCHandler(logging.StreamHandler):
+            """DCC Handler class for stand alone."""
 
-    return logger
+            def __init__(self, stream=None):
+                super(DCCHandler, self).__init__(stream)
+
+        handler = DCCHandler(sys.stdout)
+
+    return handler
+
+
+def getFabricClient():
+    """Returns the appropriate Fabric client for the DCC.
+
+    Args:
+        Arguments (Type): information.
+
+    Returns:
+        Type: True if successful.
+
+    """
+
+    client = None
+
+    for eachPlugin in __all__:
+        mod = __import__("kraken.plugins." + eachPlugin, fromlist=['dccTest'])
+        reload(mod)
+
+        if mod.dccTest() is True:
+            loaded_mod = __import__("kraken.plugins." + eachPlugin + ".fabric_client", fromlist=['getClient'])
+            reload(loaded_mod)
+
+            client = loaded_mod.getClient()
+
+    if client is None:
+        print "Failed to find DCC client. Falling back to Python client."
+
+    return client

@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import webbrowser
@@ -6,6 +7,9 @@ from PySide import QtGui, QtCore
 from kraken.ui.preference_editor import PreferenceEditor
 from kraken.core.kraken_system import KrakenSystem
 from kraken.core.configs.config import Config
+from kraken.log import getLogger
+
+logger = getLogger('kraken')
 
 
 class KrakenMenu(QtGui.QWidget):
@@ -48,7 +52,9 @@ class KrakenMenu(QtGui.QWidget):
         self.saveAsAction.setObjectName("saveAsAction")
 
         self.fileMenu.addSeparator()
-        self.recentFilesMenu = self.fileMenu.addMenu('&Recent Files')
+        self.recentFilesMenu = QtGui.QMenu(title='&Recent Files', parent=self.fileMenu)
+        self.fileMenu.addMenu(self.recentFilesMenu)
+
 
         self.fileMenu.addSeparator()
 
@@ -89,6 +95,7 @@ class KrakenMenu(QtGui.QWidget):
         # Tools Menu
         self.toolsMenu = self.menuBar.addMenu('&Tools')
         self.reloadComponentsAction = self.toolsMenu.addAction('Reload Component Modules')
+        self.reloadComponentsAction.setShortcut('Ctrl+Shift+R')
 
         # View Menu
         self.viewMenu = self.menuBar.addMenu('&View')
@@ -99,8 +106,9 @@ class KrakenMenu(QtGui.QWidget):
 
         # Help Menu
         self.helpMenu = self.menuBar.addMenu('&Help')
-        self.onlineHelpAction = self.helpMenu.addAction('Online &Help')
-        self.onlineHelpAction.setShortcut('Ctrl+H')
+        self.krakenWebSiteAction = self.helpMenu.addAction('Kraken Web Site')
+        self.krakenDocumentationAction = self.helpMenu.addAction('Kraken Documentation')
+        self.fabricForumsAction = self.helpMenu.addAction('Fabric Forums')
 
         # Logo
         logoWidget = QtGui.QLabel()
@@ -145,10 +153,6 @@ class KrakenMenu(QtGui.QWidget):
         self.setLayout(self.menuLayout)
 
 
-    def openHelp(self):
-        webbrowser.open_new_tab('http://fabric-engine.github.io/Kraken')
-
-
     def createConnections(self):
 
         krakenUIWidget = self.parentWidget().getKrakenUI()
@@ -186,12 +190,28 @@ class KrakenMenu(QtGui.QWidget):
         self.snapToGridAction.triggered[bool].connect(graphViewWidget.graphView.setSnapToGrid)
 
         # Help Menu Connections
-        self.onlineHelpAction.triggered.connect(self.openHelp)
+        self.krakenWebSiteAction.triggered.connect(self.krakenWebSite)
+        self.krakenDocumentationAction.triggered.connect(self.krakenDocumentation)
+        self.fabricForumsAction.triggered.connect(self.fabricForums)
 
+        # Config Widget
         self.configsWidget.currentIndexChanged.connect(self.setCurrentConfig)
 
         # Rig Name Label
         self.rigNameLabel.clicked.connect(graphViewWidget.editRigName)
+
+
+    # ==========
+    # Callbacks
+    # ==========
+    def krakenWebSite(self):
+        webbrowser.open_new_tab('http://fabric-engine.github.io/Kraken')
+
+    def krakenDocumentation(self):
+        webbrowser.open_new_tab('http://kraken-rigging-framework.readthedocs.io')
+
+    def fabricForums(self):
+        webbrowser.open_new_tab('http://forums.fabricengine.com/categories/kraken')
 
 
     # ============
@@ -234,13 +254,23 @@ class KrakenMenu(QtGui.QWidget):
         krakenUIWidget = self.window().krakenUI
         graphViewWidget = krakenUIWidget.graphViewWidget
 
+        openedFile = graphViewWidget.openedFile
         # Sync and Store Graph Data
         graphViewWidget.synchGuideRig()
         rigData = graphViewWidget.guideRig.getData()
 
         # Create New Rig And Reload All Components.
         graphViewWidget.newRigPreset()
-        KrakenSystem.getInstance().reloadAllComponents()
+        if krakenUIWidget.nodeLibrary.componentTreeWidget.generateData():
+            logger.info('Success Reloading Modules')
+        else:
+            logger.error('Error Reloading Modules')
+
+        if openedFile:
+            self.window().setWindowTitle('Kraken Editor - ' + openedFile + '[*]')
+            graphViewWidget.openedFile = openedFile
+
+        krakenUIWidget.nodeLibrary.componentTreeWidget.buildWidgets()
 
         # Load Saved Data And Update Widget
         graphViewWidget.guideRig.loadRigDefinition(rigData)
@@ -293,6 +323,7 @@ class KrakenMenu(QtGui.QWidget):
 
 
     def buildRecentFilesMenu(self, newFilePath=None):
+
         self.recentFilesMenu.clear()
 
         self.recentFiles = self.recentFiles[:4]

@@ -157,6 +157,12 @@ class Synchronizer(object):
 
             # Sync Xfo if it's not a Component
             if kObject.isTypeOf('Component') is False:
+
+                # If the top-level rig DCC node does not exist, don't proceed
+                # through the hierarchy.
+                if kObject.isTypeOf('Rig') and self.getDCCItem(kObject) is None:
+                    return False
+
                 self.syncXfo(kObject)
 
             # Sync Curves / Controls
@@ -180,9 +186,11 @@ class Synchronizer(object):
 
         # Iterate over attributes
         if kObject.isTypeOf('AttributeGroup'):
-            for i in xrange(kObject.getNumAttributes()):
-                attr = kObject.getAttributeByIndex(i)
-                self.synchronize(attr)
+
+            if kObject.getName() != 'implicitAttrGrp':
+                for i in xrange(kObject.getNumAttributes()):
+                    attr = kObject.getAttributeByIndex(i)
+                    self.synchronize(attr)
 
         if kObject.isTypeOf('Object3D'):
 

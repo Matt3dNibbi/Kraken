@@ -176,6 +176,13 @@ class Euler(MathObject):
         self._rtval.ro = ks.rtVal('RotationOrder', value)
 
 
+    def __eq__(self, other):
+        return self.equal(other)
+
+    def __ne__(self, other):
+        return not self.equal(other)
+
+
     def clone(self):
         """Returns a clone of the Euler.
 
@@ -184,11 +191,11 @@ class Euler(MathObject):
 
         """
 
-        euler = Euler();
-        euler.x = self.x;
-        euler.y = self.y;
-        euler.z = self.z;
-        euler.ro = self.ro;
+        euler = Euler()
+        euler.x = self.x
+        euler.y = self.y
+        euler.z = self.z
+        euler.ro = self.ro
 
         return euler
 
@@ -227,7 +234,7 @@ class Euler(MathObject):
 
         """
 
-        return self._rtval.equal('Boolean', ks.rtVal('Euler', other))
+        return self._rtval.equal('Boolean', ks.rtVal('Euler', other)).getSimpleType()
 
 
     def almostEqual(self, other, precision):

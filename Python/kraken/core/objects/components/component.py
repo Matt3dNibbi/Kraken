@@ -22,6 +22,9 @@ from kraken.core.objects.components.component_output_port import ComponentOutput
 from kraken.core.objects.components.component_output import ComponentOutput
 
 
+# Note: does a Component need to inherit off 'Object3D'?
+# These items exist only to structure a rig as a graph.
+# The never get built.
 class Component(Object3D):
     """Kraken Component object."""
 
@@ -32,6 +35,7 @@ class Component(Object3D):
         self._inputs = []
         self._outputs = []
         self._operators = []
+        self._items = {}
 
         self.setShapeVisibility(False)
 
@@ -161,11 +165,13 @@ class Component(Object3D):
     # Layer methods
     # =============
     def getLayer(self, name):
-        """Retrieves a layer from the owning container, or generates a layer
-        (and warning message).
+        """Retrieves a layer from the owning container.
+
+        Args:
+            name (str): Name of the layer to find.
 
         Returns:
-            Layer: The layer from the container, or generated layer.
+            Layer: The layer from the container.
 
         """
 
@@ -175,7 +181,10 @@ class Component(Object3D):
 
         layer = container.getChildByName(name)
         if layer is None or not layer.isTypeOf('Layer'):
-            raise KeyError("Layer '" + + "' was not found!")
+            raise KeyError("Layer '" + name + "' was not found!")
+
+        # TODO: We should be returning None instead of raising an error and users
+        # will be required to test if None.
 
         return layer
 
@@ -191,16 +200,56 @@ class Component(Object3D):
 
         """
 
+        # Note: layer objects are added to the generated rig, but without a rig, they are
+        # simply root items in the scene. This is because components are never built
         container = self.getContainer()
-        if container is None:
-            container = self
 
-        layer = container.getChildByName(name)
+        layer = None
+        if container is not None:
+            layer = container.getChildByName(name)
         if layer is None or not layer.isTypeOf('Layer'):
             layer = Layer(name, parent=container)
 
+        if container is not None:
+            container.addItem(name, layer)
+        else:
+            self.addItem(name, layer)
+
         return layer
 
+
+    # ==============
+    # Item Methods
+    # ==============
+    def addItem(self, name, item):
+        """Adds a child to the component and sets the object's component attribute.
+
+        Args:
+            child (Object): Object to add as a child.
+
+        Returns:
+            bool: True if successful.
+
+        """
+
+
+
+        # Assign the child self as the component.
+        item.setComponent(self)
+
+        self._items[name] = item
+
+        return True
+
+    def getItems(self):
+        """Returns all items for this component.
+
+        Returns:
+            list: Items for this component.
+
+        """
+
+        return dict(self._items)
 
     # ==============
     # Child Methods
@@ -216,6 +265,8 @@ class Component(Object3D):
 
         """
 
+        raise Exception("We should not be here. This mehtod is to be deprecated")
+
         super(Component, self).addChild(child)
 
         # Assign the child self as the component.
@@ -224,9 +275,52 @@ class Component(Object3D):
         return True
 
 
+    def getHierarchyNodes(self, classType=None, inheritedClass=False):
+        """Returns a nodeList with all children in component hierarchy that
+        matches classType.
+
+        Args:
+            classType (str): Optional Class type to match.
+            inheritedClass (bool): Optional Match nodes that is a sub-class of type.
+
+        Returns:
+            list: Nodes that match the class type.
+
+        """
+
+        nodeList = []
+
+        for name, item in self._items.iteritems():
+
+            if item.isTypeOf("Object3D") is False:
+                continue
+
+            if classType:
+                if inheritedClass and item.isTypeOf(classType):
+                    nodeList.append(item)
+                elif item.getTypeName() == classType:
+                    nodeList.append(item)
+            else:
+                nodeList.append(item)
+
+            item.getDescendents(nodeList=nodeList, classType=classType, inheritedClass=inheritedClass)
+
+        return nodeList
+
     # ==============
     # Input Methods
     # ==============
+    def getInputs(self):
+        """Returns all inputs for this component.
+
+        Returns:
+            list: Inputs for this component.
+
+        """
+
+        return list(self._inputs)
+
+
     def checkInputIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -413,6 +507,17 @@ class Component(Object3D):
     # ===============
     # Output Methods
     # ===============
+    def getOutputs(self):
+        """Returns all outputs for this component.
+
+        Returns:
+            list: Outputs for this component.
+
+        """
+
+        return list(self._outputs)
+
+
     def checkOutputIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -559,6 +664,20 @@ class Component(Object3D):
     # =================
     # Operator Methods
     # =================
+    def evalOperators(self):
+        """Evaluates all component operators in order they were created.
+
+        Returns:
+            bool: True if no errors during evaluation.
+
+        """
+
+        for op in self._operators:
+            op.evaluate()
+
+        return True
+
+
     def checkOperatorIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -740,6 +859,15 @@ class Component(Object3D):
 
         return True
 
+    def getOperators(self):
+        """Returns all operators for this component.
+
+        Returns:
+            list: Outputs for this component.
+
+        """
+
+        return list(self._operators)
 
     # =============
     # Data Methods
@@ -842,9 +970,91 @@ class Component(Object3D):
         return True
 
 
+    def saveAllObjectData(self, data, classType="Control", inheritedClass=False):
+        """Stores the Guide data for all objects of this type in the component.
+
+        Args:
+            data (dict): The JSON rig data object.
+            classType (str): The class of the type of object we want to store to data
+            inheritedClass (bool): Also include all objects that are inherited from classType
+
+        Returns:
+            dict: The JSON rig data object.
+
+        """
+        objects = self.getHierarchyNodes(classType=classType, inheritedClass=inheritedClass)
+        self.saveObjectData(data, objects)
+
+        return data
+
+
+    def saveObjectData(self, data, objectList):
+        """
+        Stores the Guide data for component objects in this list.
+        Guide data is xfo and curve information
+
+        Args:
+            data (dict): The JSON rig data object.
+            objectList (list): list of Object3D objects
+
+        Returns:
+            dict: The JSON rig data object.
+
+        """
+        for obj in objectList:
+            objName = obj.getName()
+            data[objName + "Xfo"] = obj.xfo
+            if obj.isTypeOf("Curve"):
+                data[objName + "CurveData"] = obj.getCurveData()
+
+        return data
+
+
+
+    def loadAllObjectData(self, data, classType="Control", inheritedClass=False):
+        """Stores the Guide data for all objects of this type in the component.
+
+        Args:
+
+            data (dict): The JSON rig data object.
+            classType (type): The class of the type of object we want to store to data
+            inheritedClass (bool): Also include all objects that are inherited from classType
+
+        Returns:
+            dict: The JSON rig data object.
+
+        """
+        objects = self.getHierarchyNodes(classType=classType, inheritedClass=inheritedClass)
+        self.loadObjectData(data, objects)
+
+        return data
+
+
+    def loadObjectData(self, data, objectList):
+        """
+        Loads the Guide data for component objects in this list.
+        Guide data is xfo and curve information
+
+        Args:
+            data (dict): The JSON rig data object.
+            objectList (list): list of Object3D objects
+
+        """
+             # this should probably live in the GuideClase
+        for obj in objectList:
+            objName = obj.getName()
+            if (objName + "Xfo") in data:
+                obj.xfo = data[objName + "Xfo"]
+
+            if obj.isTypeOf("Curve"):
+                if (objName + "CurveData") in data:
+                    obj.setCurveData(data[objName + "CurveData"])
+
+
     # ==================
     # Rig Build Methods
     # =================
+
     def getRigBuildData(self):
         """Returns the Guide data used by the Rig Component to define the layout of the final rig..
 

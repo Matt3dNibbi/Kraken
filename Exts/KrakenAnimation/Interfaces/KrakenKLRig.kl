@@ -1,0 +1,25 @@
+require Math;
+require KrakenForCanvas;
+
+interface KrakenKLRig {
+
+  UInt64 getEvalVersion();
+  init!();
+  resetPose!();
+  solve!(KrakenClipContext context);
+  setClip!(KrakenClip clip);
+  loadClipFromFile!(String filePath);
+  evaluate!(KrakenClipContext context);
+  evaluate!(KrakenClipContext context, io Mat44 joints<>);
+
+  Xfo[] getJointXfos();
+  String[] getJointNames();
+  Xfo[] getAllXfos();
+  String[] getAllNames();
+
+  String[] getShapeNames();
+  getShapeWeights(io Float32 weights<>);
+
+  KrakenControl<> getControls();
+  KrakenScalarAttribute<> getScalarAttributes();
+};
