@@ -94,6 +94,8 @@ class KrakenMenu(QtGui.QWidget):
 
         # Tools Menu
         self.toolsMenu = self.menuBar.addMenu('&Tools')
+        self.rearrangeNodesAction = self.toolsMenu.addAction('Rearrange Nodes')
+        self.rearrangeNodesAction.setShortcut('Ctrl+R')
         self.reloadComponentsAction = self.toolsMenu.addAction('Reload Component Modules')
         self.reloadComponentsAction.setShortcut('Ctrl+Shift+R')
 
@@ -184,6 +186,7 @@ class KrakenMenu(QtGui.QWidget):
 
         # Tools Menu Connections
         self.reloadComponentsAction.triggered.connect(self.reloadAllComponents)
+        self.rearrangeNodesAction.triggered.connect(graphViewWidget.graphView.rearrangeNodes)
 
         # View Menu Connections
         self.compLibAction.triggered.connect(krakenUIWidget.resizeSplitter)
