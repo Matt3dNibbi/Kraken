@@ -268,6 +268,9 @@ class Node(QtGui.QGraphicsWidget):
                 return port
         return None
 
+    def getInputPorts(self):
+        return [x for x in self.__ports if isinstance(x, InputPort)]
+
     def getInputPort(self, name):
         for port in self.__ports:
             if port.getName() == name and isinstance(port, (InputPort, IOPort)):
@@ -280,6 +283,8 @@ class Node(QtGui.QGraphicsWidget):
                 return port
         return None
 
+    def getOutputPorts(self):
+        return [x for x in self.__ports if isinstance(x, OutputPort)]
 
     def paint(self, painter, option, widget):
         rect = self.windowFrameRect()

@@ -34,13 +34,13 @@ class GraphView(QtGui.QGraphicsView):
     beginNodeSelection = QtCore.Signal()
     endNodeSelection = QtCore.Signal()
     selectionChanged = QtCore.Signal(list, list)
+    nodesRearranged = QtCore.Signal(list, list, list)
 
     # During the movement of the nodes, this signal is emitted with the incremental delta.
     selectionMoved = QtCore.Signal(set, QtCore.QPointF)
 
     # After moving the nodes interactively, this signal is emitted with the final delta.
     endSelectionMoved = QtCore.Signal(set, QtCore.QPointF)
-
 
 
     _clipboardData = None
@@ -332,6 +332,28 @@ class GraphView(QtGui.QGraphicsView):
     # After moving the nodes interactively, this signal is emitted with the final delta.
     def endMoveSelectedNodes(self, delta):
         self.endSelectionMoved.emit(self.__selection, delta)
+
+
+    def rearrangeNodes(self):
+
+        # TODO Need to recursively get nodes that are inputs to this node
+        nodes = self.getSelectedNodes()
+
+        srcNodes = []
+        for conn in self.__connections:
+            dstNode = conn.getDstPort().getNode()
+            if dstNode in nodes:
+                srcNode = conn.getSrcPort().getNode()
+                srcNodes.append(srcNode)
+
+        for each in srcNodes:
+            print each.getName()
+
+        origPositions = [x.getGraphPos() for x in nodes]
+        newPositions = [x.getGraphPos() for x in nodes]
+
+        self.nodesRearranged.emit(nodes, origPositions, newPositions)
+
 
     ################################################
     ## Connections

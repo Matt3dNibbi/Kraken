@@ -111,6 +111,28 @@ class NodesMoveCommand(Command):
             node.translate( -self.delta.x(), -self.delta.y())
 
 
+class NodesRearrangeCommand(Command):
+    def __init__(self, graph, nodes, origPositions, newPositions):
+        super(NodesRearrangeCommand, self).__init__()
+        self.graph = graph
+        self.nodes = nodes
+        self.origPositions = origPositions
+        self.newPositions = newPositions
+        self.desc = "Rearranged: "
+        for node in self.nodes:
+            self.desc = self.desc + ", " + node.getName()
+
+    def shortDesc(self):
+        return self.desc
+
+    def redo(self):
+        for i, node in enumerate(self.nodes):
+            node.setGraphPos(self.newPositions[i])
+
+    def undo(self):
+        for i, node in enumerate(self.nodes):
+            node.setGraphPos(self.origPositions[i])
+
 
 class ConnectionAddedCommand(Command):
     def __init__(self, graph, rig, connection):

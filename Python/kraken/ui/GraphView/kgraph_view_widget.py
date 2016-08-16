@@ -50,6 +50,7 @@ class KGraphViewWidget(GraphViewWidget):
 
         graphView.selectionChanged.connect(self.__onSelectionChanged)
         graphView.endSelectionMoved.connect(self.__onSelectionMoved)
+        graphView.nodesRearranged.connect(self.__onRearrangeNodes)
 
         graphView.beginDeleteSelection.connect(self.__onBeginDeleteSelection)
         graphView.endDeleteSelection.connect(self.__onEndDeleteSelection)
@@ -449,6 +450,12 @@ class KGraphViewWidget(GraphViewWidget):
     def __onSelectionMoved(self, nodes, delta):
         if not UndoRedoManager.getInstance().isUndoingOrRedoing():
             command = graph_commands.NodesMoveCommand(self.graphView, nodes, delta)
+            UndoRedoManager.getInstance().addCommand(command)
+
+    def __onRearrangeNodes(self, nodes, origPositions, newPositions):
+        if not UndoRedoManager.getInstance().isUndoingOrRedoing():
+
+            command = graph_commands.NodesRearrangeCommand(self.graphView, nodes, origPositions, newPositions)
             UndoRedoManager.getInstance().addCommand(command)
 
     def __onBeginDeleteSelection(self):
