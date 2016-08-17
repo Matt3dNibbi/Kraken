@@ -268,6 +268,9 @@ class Node(QtGui.QGraphicsWidget):
                 return port
         return None
 
+    def getPorts(self):
+        return self.__ports
+
     def getInputPorts(self):
         return [x for x in self.__ports if isinstance(x, InputPort)]
 
