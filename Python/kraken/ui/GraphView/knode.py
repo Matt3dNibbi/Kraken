@@ -57,7 +57,8 @@ class KNodePortCircle(PortCircle):
         if self.isInConnectionPoint():
             return self.getPort().getComponentInput().canConnectTo(otherPortCircle.getPort().getComponentOutput())
         else:
-            return self.getPort().getComponentOutput().canConnectTo(otherPortCircle.getPort().getComponentInput())
+            if otherPortCircle.isInConnectionPoint():
+                return self.getPort().getComponentOutput().canConnectTo(otherPortCircle.getPort().getComponentInput())
 
 
 class KNodeInputPort(InputPort):
