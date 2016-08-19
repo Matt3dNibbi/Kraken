@@ -103,6 +103,76 @@ class KGraphView(GraphView):
 
         return [graphNodes[x] for x in graphNodes if type(graphNodes[x]).__name__ == nodeType]
 
+    # ======
+    # Nodes
+    # ======
+    def rearrangeNodes(self):
+
+        rig = self.getRig()
+        components = rig.getChildrenByType('Component')
+
+        selNodes = self.getSelectedNodes()
+        selComponents = [x.getComponent() for x in selNodes]
+
+        def walkUp(component, parentComponents):
+
+            connectedOutputs = [x for x in component.getOutputs() if x.isConnected() is True]
+
+            connectedComps = []
+            for output in connectedOutputs:
+                for i in xrange(output.getNumConnections()):
+                    component = output.getConnection(i).getParent()
+                    connectedComps.append(component)
+                    parentComponents.append(component)
+
+            for comp in connectedComps:
+                walkUp(comp, parentComponents)
+
+        def dep_walk(comp, visited, unseen, depth=0):
+            """Recursively walks the input connections for the specified
+            component while adding visited components to the visited list.
+
+            Args:
+                comp (Component): the component to walk.
+                visited (list): list that holds the visited components.
+                unseen (list): list that holds the unseen components.
+
+            """
+
+            unseen.append(comp)
+
+            connectedInputs = [x for x in comp.getInputs() if x.isConnected() is True]
+            connectedComps = [x.getConnection().getParent() for x in connectedInputs]
+
+            for connComp in connectedComps:
+                if connComp not in visited:
+                    if connComp in unseen:
+                        # Cyclic connection
+                        continue
+
+                    dep_walk(connComp, visited, unseen, depth + 1)
+
+            visited.append(comp)
+            unseen.remove(comp)
+
+        # Get Root Components
+        rootComponents = []
+        for each in selComponents:
+            parents = []
+            walkUp(each, parents)
+
+            overlappingComponents = [x for x in selComponents if x in parents]
+            if len(overlappingComponents) == 0:
+                rootComponents.append(each)
+
+        # Walk down from Root and build tree data
+        unseen = []
+        orderedComponents = []
+        for comp in rootComponents:
+            dep_walk(comp, orderedComponents, unseen)
+
+        print [x.getName() for x in orderedComponents]
+
     # =======
     # Events
     # =======
