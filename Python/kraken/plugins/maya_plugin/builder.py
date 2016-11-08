@@ -1356,10 +1356,11 @@ class Builder(Builder):
                                     connectionTargets[i]['dccSceneItem'])
 
                         else:
-                            connectOutput(
-                                canvasNode + "." + canvasRigPortMap[portName][0],
-                                connectionTargets['opObject'],
-                                connectionTargets['dccSceneItem'])
+                            if connectionTargets['opObject'] is not None:                          
+                                connectOutput(
+                                    canvasNode + "." + canvasRigPortMap[portName][0],
+                                    connectionTargets['opObject'],
+                                    connectionTargets['dccSceneItem'])
 
                     elif portDataType.endswith('[]') or portDataType.endswith('<>'):
                         for i in xrange(len(connectionTargets)):
