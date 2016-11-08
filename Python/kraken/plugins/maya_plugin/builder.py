@@ -34,6 +34,13 @@ class Builder(Builder):
     def __init__(self):
         super(Builder, self).__init__()
 
+        self.__useCanvasRigNode = 'canvasRigNode' in pm.ls(nodeTypes=True)
+        self.__canvasRigPortTypes = {
+                                      'Mat44' : 'matrix',
+                                      'Scalar': 'scalar'
+                                    }
+
+
     def deleteBuildElements(self):
         """Clear out all dcc built elements from the scene if exist."""
 
@@ -372,6 +379,10 @@ class Builder(Builder):
 
         if kAttribute.getParent().getName() == 'implicitAttrGrp':
             return False
+
+        # todo: not sure about this one
+        # if self.__useCanvasRigNode:
+        #     return False
 
         parentDCCSceneItem = self.getDCCSceneItem(kAttribute.getParent().getParent())
         parentDCCSceneItem.addAttr(kAttribute.getName(),
@@ -760,7 +771,7 @@ class Builder(Builder):
         connectionTarget = connection.getTarget()
         inputTarget = connectionInput.getTarget()
 
-        if connection.getDataType().endswith('[]'):
+        if connection.getDataType().endswith('[]') or connection.getDataType().endswith('<>'):
             connectionTarget = connection.getTarget()[connectionInput.getIndex()]
         else:
             connectionTarget = connection.getTarget()
@@ -848,7 +859,24 @@ class Builder(Builder):
                 }
 
             # Create Canvas Operator
-            canvasNode = pm.createNode('canvasNode', name=buildName)
+            canvasNode = None
+            if self.__useCanvasRigNode:
+              canvasNode = pm.createNode('canvasRigNode', name=buildName)
+            else:
+              canvasNode = pm.createNode('canvasNode', name=buildName)
+            canvasRigPortMap = {}
+
+            canvasRigDecomposeNodeName = 'rigValuesDecompose'
+            canvasRigDecomposeNodeCode = []
+            canvasRigDecomposeNodeOffsets = {}
+            canvasRigComposeNodeName = 'rigValuesCompose'
+            canvasRigComposeNodeCode = []
+            canvasRigComposeNodeOffsets = {}
+
+            for portType in self.__canvasRigPortTypes:
+              canvasRigDecomposeNodeOffsets[portType] = 0
+              canvasRigComposeNodeOffsets[portType] = 0
+
             self._registerSceneItemPair(kOperator, pm.PyNode(canvasNode))
 
             config = Config.getInstance()
@@ -857,6 +885,7 @@ class Builder(Builder):
             opTypeToken = typeTokens.get(type(kOperator).__name__, 'op')
             solverNodeName = '_'.join([kOperator.getName(), opTypeToken])
             solverSolveNodeName = '_'.join([kOperator.getName(), 'solve', opTypeToken])
+            targetNodeName = solverSolveNodeName
 
             if isKLBased is True:
 
@@ -931,11 +960,47 @@ class Builder(Builder):
                     xPos="100",
                     yPos="100")
 
+                targetNodeName = graphNodeName
+
             portCount = 0
             if isKLBased is True:
                 portCount = len(kOperator.getSolverArgs())
             else:
                 portCount = node.getExecPortCount()
+
+            # for canvas rig nodes data will be 
+            # provided as large mat44, vector etc static attributes
+            # within maya - so we need to decompose from that and recompose
+            if self.__useCanvasRigNode:
+
+                pm.FabricCanvasAddFunc(mayaNode=canvasNode,
+                                       execPath="",
+                                       title=canvasRigDecomposeNodeName,
+                                       code="dfgEntry {\n}\n", xPos="-520", yPos="150")
+
+                pm.FabricCanvasAddFunc(mayaNode=canvasNode,
+                                       execPath="",
+                                       title=canvasRigComposeNodeName,
+                                       code="dfgEntry {\n}\n", xPos="450", yPos="150")
+
+                def setupComposePort(node, name, typespec, mode):
+                    pm.FabricCanvasAddPort(mayaNode=canvasNode,
+                                           execPath=node,
+                                           desiredPortName=name,
+                                           portType=mode,
+                                           typeSpec=typespec,
+                                           connectToPortPath="")
+
+                    pm.FabricCanvasAddPort(mayaNode=canvasNode,
+                                           execPath="",
+                                           desiredPortName=name,
+                                           portType=mode,
+                                           typeSpec=typespec,
+                                           connectToPortPath="%s.%s" % (node, name))
+
+                for portType in self.__canvasRigPortTypes:
+                    setupComposePort(canvasRigDecomposeNodeName, '%sInputs' % self.__canvasRigPortTypes[portType], portType + '[]', 'In')
+                    setupComposePort(canvasRigComposeNodeName, '%sOutputs' % self.__canvasRigPortTypes[portType], portType + '[]', 'Out')
 
             for i in xrange(portCount):
 
@@ -951,8 +1016,73 @@ class Builder(Builder):
                     rtVal = opBinding.getArgValue(portName)
                     portDataType = rtVal.getTypeName().getSimpleType()
 
+                basePortDataType = portDataType.partition('[')[0].partition('<')[0]
+                if basePortDataType == 'Float32':
+                    basePortDataType = 'Scalar'
+
                 if portConnectionType == 'In':
-                    if isKLBased is True:
+
+                    if self.__useCanvasRigNode and basePortDataType in self.__canvasRigPortTypes:
+
+                        connectedObjects = kOperator.getInput(portName)
+
+                        numElements = 1
+                        if isinstance(connectedObjects, list) or isinstance(connectedObjects, tuple):
+                            numElements = len(connectedObjects)
+
+                        srcExecPath = canvasRigDecomposeNodeName
+                        srcExecPortPath = "%s.%s" % (srcExecPath, portName)
+
+                        pm.FabricCanvasAddPort(mayaNode=canvasNode,
+                                               execPath=srcExecPath,
+                                               desiredPortName=portName,
+                                               portType="Out",
+                                               typeSpec=portDataType,
+                                               connectToPortPath="")
+
+                        member = self.__canvasRigPortTypes[basePortDataType] + 'Inputs'
+
+                        if portDataType.endswith('[]'):
+
+                            logger.warning("Operator '" + targetNodeName +
+                                           "' uses an [] for port '" + portName + "'. Please use an external array for performance(<>).")
+                                  
+                            canvasRigDecomposeNodeCode += ['%s.resize(%d);' % (portName, numElements)]
+                            canvasRigDecomposeNodeCode += ['for(Size i=0;i<%d;i++)' % (numElements)]
+                            canvasRigDecomposeNodeCode += ['  %s[i] = %s[%d + i];' % (portName, member, canvasRigDecomposeNodeOffsets[basePortDataType])]
+                            canvasRigPortMap[portName] = []
+                            for i in range(numElements):
+                              canvasRigPortMap[portName] += ['%s[%d]' % (member, canvasRigDecomposeNodeOffsets[basePortDataType] + i)]
+
+                        elif portDataType.endswith('<>'):
+
+                            canvasRigDecomposeNodeCode += ['%s = %d<>(%s[%d].data(), %d);' % (portName, basePortDataType, member, numElements)]
+                            canvasRigPortMap[portName] = []
+                            for i in range(numElements):
+                              canvasRigPortMap[portName] += ['%s[%d]' % (member, canvasRigDecomposeNodeOffsets[basePortDataType] + i)]
+
+                        else:
+
+                            canvasRigDecomposeNodeCode += ['%s = %s[%d];' % (portName, member, canvasRigDecomposeNodeOffsets[basePortDataType])]
+                            canvasRigPortMap[portName] = ['%s[%d]' % (member, canvasRigDecomposeNodeOffsets[basePortDataType])]
+                        
+                        canvasRigDecomposeNodeOffsets[basePortDataType] = canvasRigDecomposeNodeOffsets[basePortDataType] + numElements
+
+                        if isKLBased:
+                            pm.FabricCanvasAddPort(mayaNode=canvasNode,
+                                                   execPath=targetNodeName,
+                                                   desiredPortName=portName,
+                                                   portType="In",
+                                                   typeSpec=portDataType,
+                                                   connectToPortPath="")
+
+                        pm.FabricCanvasConnect(mayaNode=canvasNode,
+                                               execPath="",
+                                               srcPortPath=srcExecPortPath,
+                                               dstPortPath=targetNodeName + "." + portName)
+
+                    elif isKLBased is True:
+
                         pm.FabricCanvasAddPort(mayaNode=canvasNode,
                                                execPath="",
                                                desiredPortName=portName,
@@ -973,6 +1103,7 @@ class Builder(Builder):
                                                dstPortPath=solverSolveNodeName + "." + portName)
 
                     else:
+
                         if portDataType != 'Execute':
                             pm.FabricCanvasAddPort(
                                 mayaNode=canvasNode,
@@ -1008,7 +1139,42 @@ class Builder(Builder):
                     else:
                         srcPortNode = graphNodeName
 
-                    if portDataType not in ('Execute', 'InlineInstance', 'DrawingHandle'):
+                    if self.__useCanvasRigNode and basePortDataType in self.__canvasRigPortTypes:
+
+                        connectedObjects = kOperator.getOutput(portName)
+
+                        numElements = 1
+                        if isinstance(connectedObjects, list) or isinstance(connectedObjects, tuple):
+                            numElements = len(connectedObjects)
+
+                        dstPortPath = "%s.%s" % (canvasRigComposeNodeName, portName)
+
+                        pm.FabricCanvasAddPort(mayaNode=canvasNode,
+                                               execPath=canvasRigComposeNodeName,
+                                               desiredPortName=portName,
+                                               portType="In",
+                                               typeSpec=portDataType,
+                                               connectToPortPath="")
+
+                        member = self.__canvasRigPortTypes[basePortDataType] + 'Outputs'
+
+                        if portDataType.endswith('[]') or portDataType.endswith('<>'):
+
+                            canvasRigComposeNodeCode += ['for(Size i=0;i<%d;i++)' % (numElements)]
+                            canvasRigComposeNodeCode += ['  %s[%d + i] = %s[i];' % (member, canvasRigComposeNodeOffsets[basePortDataType], portName)]
+                            canvasRigPortMap[portName] = []
+                            for i in range(numElements):
+                              canvasRigPortMap[portName] += ['%s[%d]' % (member, canvasRigComposeNodeOffsets[basePortDataType] + i)]
+
+                        else:
+
+                            canvasRigComposeNodeCode += ['%s[%d] = %s;' % (member, canvasRigComposeNodeOffsets[basePortDataType], portName)]
+                            canvasRigPortMap[portName] = ['%s[%d]' % (member, canvasRigComposeNodeOffsets[basePortDataType])]
+                        
+                        canvasRigComposeNodeOffsets[basePortDataType] = canvasRigComposeNodeOffsets[basePortDataType] + numElements
+
+                    elif portDataType not in ('Execute', 'InlineInstance', 'DrawingHandle'):
+
                         pm.FabricCanvasAddPort(
                             mayaNode=canvasNode,
                             execPath="",
@@ -1050,7 +1216,7 @@ class Builder(Builder):
                 elif portConnectionType in ['IO', 'Out']:
                     connectedObjects = kOperator.getOutput(portName)
 
-                if portDataType.endswith('[]'):
+                if portDataType.endswith('[]') or portDataType.endswith('<>'):
 
                     # In CanvasMaya, output arrays are not resized by the system
                     # prior to calling into Canvas, so we explicily resize the
@@ -1127,7 +1293,23 @@ class Builder(Builder):
 
                             pm.setAttr(tgt, opObject)
 
-                    if portDataType.endswith('[]'):
+                    if canvasRigPortMap.has_key(portName):
+
+                        if portDataType.endswith('[]') or portDataType.endswith('<>'):
+
+                            for i in xrange(len(connectionTargets)):
+                                connectInput(
+                                    canvasNode + "." + canvasRigPortMap[portName][i],
+                                    connectionTargets[i]['opObject'],
+                                    connectionTargets[i]['dccSceneItem'])
+
+                        else:
+                            connectInput(
+                                canvasNode + "." + canvasRigPortMap[portName][0],
+                                connectionTargets['opObject'],
+                                connectionTargets['dccSceneItem'])
+
+                    elif portDataType.endswith('[]') or portDataType.endswith('<>'):
                         for i in xrange(len(connectionTargets)):
                             connectInput(
                                 canvasNode + "." + portName + '[' + str(i) + ']',
@@ -1163,7 +1345,23 @@ class Builder(Builder):
                         else:
                             raise NotImplementedError("Kraken Canvas Operator cannot set object [%s] outputs with Python built-in types [%s] directly!" % (src, opObject.__class__.__name__))
 
-                    if portDataType.endswith('[]'):
+                    if canvasRigPortMap.has_key(portName):
+
+                        if portDataType.endswith('[]') or portDataType.endswith('<>'):
+
+                            for i in xrange(len(connectionTargets)):
+                                connectOutput(
+                                    canvasNode + "." + canvasRigPortMap[portName][i],
+                                    connectionTargets[i]['opObject'],
+                                    connectionTargets[i]['dccSceneItem'])
+
+                        else:
+                            connectOutput(
+                                canvasNode + "." + canvasRigPortMap[portName][0],
+                                connectionTargets['opObject'],
+                                connectionTargets['dccSceneItem'])
+
+                    elif portDataType.endswith('[]') or portDataType.endswith('<>'):
                         for i in xrange(len(connectionTargets)):
                             connectOutput(
                                 str(canvasNode + "." + portName) + '[' + str(i) + ']',
@@ -1175,6 +1373,21 @@ class Builder(Builder):
                                 str(canvasNode + "." + portName),
                                 connectionTargets['opObject'],
                                 connectionTargets['dccSceneItem'])
+
+            if self.__useCanvasRigNode:
+                for portType in self.__canvasRigPortTypes:
+                    member = self.__canvasRigPortTypes[portType]
+                    inoffset = canvasRigDecomposeNodeOffsets[portType]
+                    outoffset = canvasRigComposeNodeOffsets[portType]
+                    canvasRigDecomposeNodeCode = ['if(%sInputs.size() < %d)' % (member, inoffset), '  return;'] + canvasRigDecomposeNodeCode
+                    canvasRigComposeNodeCode = ['%sOutputs.resize(%d);' % (member, outoffset)] + canvasRigComposeNodeCode
+
+                pm.FabricCanvasSetCode(mayaNode=canvasNode,
+                                       execPath=canvasRigDecomposeNodeName,
+                                       code='dfgEntry {\n  %s\n}\n' % '\n  '.join(canvasRigDecomposeNodeCode))
+                pm.FabricCanvasSetCode(mayaNode=canvasNode,
+                                       execPath=canvasRigComposeNodeName,
+                                       code='dfgEntry {\n  %s\n}\n' % '\n  '.join(canvasRigComposeNodeCode))
 
             if isKLBased is True:
                 opSourceCode = kOperator.generateSourceCode()
