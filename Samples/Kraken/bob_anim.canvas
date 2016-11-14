@@ -1,13 +1,15 @@
 {
   "objectType" : "Graph",
   "metadata" : {
+    "timeline_timerFps" : "60",
     "camera_mat44" : "{\n  \"row0\" : {\n    \"x\" : 0.7475038766860962,\n    \"y\" : 0.006978887598961592,\n    \"z\" : -0.6642196178436279,\n    \"t\" : -21.28894424438477\n    },\n  \"row1\" : {\n    \"x\" : 6.658951434701521e-08,\n    \"y\" : 0.9999440908432007,\n    \"z\" : 0.01050638593733311,\n    \"t\" : 6.517913341522217\n    },\n  \"row2\" : {\n    \"x\" : 0.6642562747001648,\n    \"y\" : -0.007853614166378975,\n    \"z\" : 0.7474626898765564,\n    \"t\" : 23.54839324951172\n    },\n  \"row3\" : {\n    \"x\" : 0,\n    \"y\" : 0,\n    \"z\" : 0,\n    \"t\" : 1\n    }\n  }",
     "timeline_start" : "1",
     "timeline_loopMode" : "1",
     "timeline_simMode" : "0",
     "camera_focalDistance" : "31.81059646606445",
     "timeline_current" : "1",
-    "timeline_end" : "250"
+    "timeline_end" : "250",
+    "uiGraphPan" : "{\n  \"x\" : -895.0,\n  \"y\" : -48.0\n  }"
     },
   "title" : "",
   "ports" : [
@@ -122,7 +124,7 @@
     {
       "objectType" : "Inst",
       "metadata" : {
-        "uiGraphPos" : "{\"x\":1253.0,\"y\":142.0}"
+        "uiGraphPos" : "{\"x\":1456.0,\"y\":158.0}"
         },
       "name" : "DrawAxesInstances_1",
       "ports" : [
@@ -261,6 +263,27 @@
           }
         ],
       "executable" : "Kraken.KLRigs.KRK_char_bob_guide.SetClip"
+      },
+    {
+      "objectType" : "Inst",
+      "metadata" : {
+        "uiGraphPos" : "{\"x\":1246.0,\"y\":236.0}"
+        },
+      "name" : "Report_1",
+      "ports" : [
+        {
+          "objectType" : "InstPort",
+          "name" : "exec",
+          "nodePortType" : "IO"
+          },
+        {
+          "objectType" : "InstPort",
+          "name" : "value",
+          "nodePortType" : "In"
+          }
+        ],
+      "executable" : "Fabric.Core.Func.Report",
+      "presetGUID" : "E9448726588111C443C34B2F3D9B0172"
       }
     ],
   "connections" : {
@@ -271,7 +294,7 @@
       "GetJointXfos_1.rig"
       ],
     "GetJointXfos_1.result" : [
-      "DrawAxesInstances_1.transforms"
+      "Report_1.value"
       ],
     "EmptyDrawingHandle_1.handle" : [
       "DrawAxesInstances_1.this"
@@ -287,6 +310,9 @@
       ],
     "SetClip_1.rig" : [
       "Evaluate_1.rig"
+      ],
+    "Report_1.value" : [
+      "DrawAxesInstances_1.transforms"
       ]
     },
   "requiredPresets" : {
@@ -784,6 +810,38 @@ dfgEntry {
         },
       "code" : "dfgEntry {
   rig.setClip(clip);
+}
+"
+      },
+    "Fabric.Core.Func.Report" : {
+      "objectType" : "Func",
+      "metadata" : {
+        "uiNodeColor" : "{\n  \"r\" : 214,\n  \"g\" : 191,\n  \"b\" : 103\n  }",
+        "uiAlwaysShowDaisyChainPorts" : "true",
+        "uiHeaderColor" : "{\n  \"r\" : 188,\n  \"g\" : 129,\n  \"b\" : 83\n  }"
+        },
+      "title" : "Report",
+      "ports" : [
+        {
+          "objectType" : "ExecPort",
+          "name" : "exec",
+          "nodePortType" : "IO",
+          "execPortType" : "IO",
+          "typeSpec" : "Execute"
+          },
+        {
+          "objectType" : "ExecPort",
+          "name" : "value",
+          "nodePortType" : "Out",
+          "execPortType" : "In",
+          "typeSpec" : "$TYPE$"
+          }
+        ],
+      "extDeps" : {},
+      "presetGUID" : "E9448726588111C443C34B2F3D9B0172",
+      "code" : "
+dfgEntry {
+	report(value);
 }
 "
       }
