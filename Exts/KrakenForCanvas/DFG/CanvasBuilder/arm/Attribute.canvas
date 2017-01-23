@@ -1,6 +1,7 @@
 {
   "objectType" : "Graph",
-  "title" : "MyRigCtrl",
+  "title" : "MyRigAttr",
+  "presetGUID" : "559826EDC71CB98CFA74ED05F31F2A85",
   "ports" : [
     {
       "objectType" : "Port",
@@ -11,7 +12,7 @@
     {
       "objectType" : "Port",
       "metadata" : {
-        "uiCombo" : "(\"MyRig.controls.arm.bicepFK.bicepFK\", \"MyRig.controls.arm.bicepFK.bicepFK.forearmFK.forearmFK\", \"MyRig.controls.arm.IK.IK\", \"MyRig.controls.arm.UpV.UpV\")"
+        "uiCombo" : "(\"MyRig.controls.arm.IK.IK.DisplayInfo_ArmSettings.bone1Len\", \"MyRig.controls.arm.IK.IK.DisplayInfo_ArmSettings.bone2Len\", \"MyRig.controls.arm.IK.IK.DisplayInfo_ArmSettings.fkik\", \"MyRig.controls.arm.IK.IK.DisplayInfo_ArmSettings.softDist\", \"MyRig.controls.arm.IK.IK.DisplayInfo_ArmSettings.stretchBlend\")"
         },
       "nodePortType" : "Out",
       "name" : "key",
@@ -19,6 +20,9 @@
       },
     {
       "objectType" : "Port",
+      "metadata" : {
+        "uiRange" : "(0.0, 1.0)"
+        },
       "nodePortType" : "Out",
       "name" : "value",
       "execPortType" : "In"
@@ -46,8 +50,8 @@
           "name" : "value"
           }
         ],
-      "executable" : "Kraken.Dictionaries.XfoDict.Set",
-      "presetGUID" : "F8D1126EC1BF6E8228F5B8AC140286AB"
+      "executable" : "Kraken.Dictionaries.Float32Dict.Set",
+      "presetGUID" : "4F997A8AB6B85994977EF0F18E18CDC1"
       }
     ],
   "connections" : {
@@ -65,7 +69,7 @@
       ]
     },
   "requiredPresets" : {
-    "Kraken.Dictionaries.XfoDict.Set" : {
+    "Kraken.Dictionaries.Float32Dict.Set" : {
       "objectType" : "Func",
       "title" : "Set",
       "ports" : [
@@ -74,7 +78,7 @@
           "nodePortType" : "IO",
           "name" : "dict",
           "execPortType" : "IO",
-          "typeSpec" : "Xfo[String]"
+          "typeSpec" : "Float32[String]"
           },
         {
           "objectType" : "Port",
@@ -88,11 +92,11 @@
           "nodePortType" : "Out",
           "name" : "value",
           "execPortType" : "In",
-          "typeSpec" : "Xfo"
+          "typeSpec" : "Float32"
           }
         ],
       "extDeps" : {},
-      "presetGUID" : "F8D1126EC1BF6E8228F5B8AC140286AB",
+      "presetGUID" : "4F997A8AB6B85994977EF0F18E18CDC1",
       "code" : "
 dfgEntry {
 	dict[key] = value;
