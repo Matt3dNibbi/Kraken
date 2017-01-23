@@ -1,0 +1,3 @@
+[submodule "Python/pyflowgraph"]
+	path = Python/pyflowgraph
+	url = git@github.com:EricTRocks/pyflowgraph.git
