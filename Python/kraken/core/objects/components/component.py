@@ -111,7 +111,6 @@ class Component(Object3D):
 
         return self.location.getValue()
 
-
     def setLocation(self, location):
         """Sets the location of the component.
 
@@ -152,7 +151,6 @@ class Component(Object3D):
         """
 
         return self._graphPos
-
 
     def setGraphPos(self, graphPos):
         """Sets the graphPos of the component.
@@ -196,7 +194,6 @@ class Component(Object3D):
         # will be required to test if None.
 
         return layer
-
 
     def getOrCreateLayer(self, name):
         """Retrieves a layer from the owning container, or generates a layer (and warning message)
@@ -283,7 +280,6 @@ class Component(Object3D):
 
         return True
 
-
     def getHierarchyNodes(self, classType='', inheritedClass=False):
         """Returns a nodeList with all children in component hierarchy that
         matches classType.
@@ -332,7 +328,6 @@ class Component(Object3D):
 
         return list(self._inputs)
 
-
     def checkInputIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -348,7 +343,6 @@ class Component(Object3D):
             raise IndexError("'" + str(index) + "' is out of the range of 'inputs' array.")
 
         return True
-
 
     def createInput(self, name, dataType, **kwargs):
         """Creates an input object and also a connected target object that matches
@@ -403,7 +397,6 @@ class Component(Object3D):
 
         return componentInputPort
 
-
     def addInput(self, name, dataType):
         """Add input port Object to this object.
 
@@ -425,7 +418,6 @@ class Component(Object3D):
 
         return componentInputPort
 
-
     def removeInputByIndex(self, index):
         """Remove ComponentInputPort at specified index.
 
@@ -443,7 +435,6 @@ class Component(Object3D):
         del self._inputs[index]
 
         return True
-
 
     def removeInputByName(self, name):
         """Removes a input from this object by name.
@@ -469,7 +460,6 @@ class Component(Object3D):
 
         return True
 
-
     def getNumInputs(self):
         """Returns the number of inputs this component has.
 
@@ -479,7 +469,6 @@ class Component(Object3D):
         """
 
         return len(self._inputs)
-
 
     def getInputByIndex(self, index):
         """Returns the input object at specified index.
@@ -496,7 +485,6 @@ class Component(Object3D):
             return False
 
         return self._inputs[index]
-
 
     def getInputByName(self, name):
         """Returns the input object with the specified name.
@@ -529,7 +517,6 @@ class Component(Object3D):
 
         return list(self._outputs)
 
-
     def checkOutputIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -545,7 +532,6 @@ class Component(Object3D):
             raise IndexError("'" + str(index) + "' is out of the range of 'outputs' array.")
 
         return True
-
 
     def createOutput(self, name, dataType, **kwargs):
         """Creates an output object and also a connected target object that matches
@@ -604,7 +590,6 @@ class Component(Object3D):
 
         return componentOutputPort
 
-
     def addOutput(self, name, dataType):
         """Add output port Object to this object.
 
@@ -626,7 +611,6 @@ class Component(Object3D):
 
         return componentOutputPort
 
-
     def getNumOutputs(self):
         """Returns the number of outputs this component has.
 
@@ -636,7 +620,6 @@ class Component(Object3D):
         """
 
         return len(self._outputs)
-
 
     def getOutputByIndex(self, index):
         """Returns the output object at specified index.
@@ -653,7 +636,6 @@ class Component(Object3D):
             return False
 
         return self._outputs[index]
-
 
     def getOutputByName(self, name):
         """Returns the output object with the specified name.
@@ -689,7 +671,6 @@ class Component(Object3D):
 
         return True
 
-
     def checkOperatorIndex(self, index):
         """Checks the supplied index is valid.
 
@@ -705,7 +686,6 @@ class Component(Object3D):
             raise IndexError("'" + str(index) + "' is out of the range of the 'children' array.")
 
         return True
-
 
     def addOperator(self, operator):
         """Adds a operator to this object.
@@ -727,7 +707,6 @@ class Component(Object3D):
 
         return True
 
-
     def removeOperatorByIndex(self, index):
         """Removes a operator from this object by index.
 
@@ -745,7 +724,6 @@ class Component(Object3D):
         del self._operators[index]
 
         return True
-
 
     def removeOperatorByName(self, name):
         """Removes a operator from this object by name.
@@ -771,7 +749,6 @@ class Component(Object3D):
 
         return True
 
-
     def getNumOperators(self):
         """Returns the number of operators this object has.
 
@@ -781,7 +758,6 @@ class Component(Object3D):
         """
 
         return len(self._operators)
-
 
     def getOperatorByIndex(self, index):
         """Returns the operator object at specified index.
@@ -799,7 +775,6 @@ class Component(Object3D):
 
         return self._operators[index]
 
-
     def getOperatorByName(self, name):
         """Returns the operator object with the specified name.
 
@@ -816,7 +791,6 @@ class Component(Object3D):
                 return eachOperator
 
         return None
-
 
     def getOperatorByType(self, childType):
         """Returns all children that are of the specified type.
@@ -836,7 +810,6 @@ class Component(Object3D):
 
         return childrenOfType
 
-
     def getOperatorIndex(self, operator):
         """Return the index of the specified operator.
 
@@ -853,7 +826,6 @@ class Component(Object3D):
                 return index
 
         return None
-
 
     def moveOperatorToIndex(self, operator, index):
         """Moves an operator to the specified index.
@@ -914,7 +886,6 @@ class Component(Object3D):
 
         return data
 
-
     def loadData(self, data):
         """Load a saved guide representation from persisted data.
 
@@ -948,6 +919,13 @@ class Component(Object3D):
 
         return True
 
+    def resetData(self):
+
+        data = getattr(self, 'default_data', None)
+        if data is None:
+            logger.warn("Component: '{}' doesn't have 'default_data' to reset to.".format(self.getName()))
+        else:
+            self.loadData(data)
 
     # ==================
     # Copy/Paste Methods
@@ -961,7 +939,6 @@ class Component(Object3D):
         """
 
         return self.saveData()
-
 
     def pasteData(self, data, setLocation=True):
         """Paste a copied guide representation.
@@ -986,7 +963,6 @@ class Component(Object3D):
 
         return True
 
-
     def saveAllObjectData(self, data, classType="Control", inheritedClass=False):
         """Stores the Guide data for all objects of this type in the component.
 
@@ -1003,7 +979,6 @@ class Component(Object3D):
         self.saveObjectData(data, objects)
 
         return data
-
 
     def saveObjectData(self, data, objectList):
         """
@@ -1028,8 +1003,6 @@ class Component(Object3D):
 
         return data
 
-
-
     def loadAllObjectData(self, data, classType="Control", inheritedClass=False):
         """Stores the Guide data for all objects of this type in the component.
 
@@ -1047,7 +1020,6 @@ class Component(Object3D):
         self.loadObjectData(data, objects)
 
         return data
-
 
     def loadObjectData(self, data, objectList):
         """
@@ -1076,7 +1048,6 @@ class Component(Object3D):
     # ==================
     # Rig Build Methods
     # =================
-
     def getRigBuildData(self):
         """Returns the Guide data used by the Rig Component to define the layout of the final rig..
 
@@ -1102,7 +1073,6 @@ class Component(Object3D):
 
         return data
 
-
     def detach(self):
         """Detaches component from container.
 
@@ -1112,7 +1082,6 @@ class Component(Object3D):
         """
 
         raise NotImplemented("This method should be implemented in sub-classes.")
-
 
     def attach(self, container):
         """Attaches component to container.
@@ -1144,4 +1113,3 @@ class Component(Object3D):
         """
 
         return 'Base'
-

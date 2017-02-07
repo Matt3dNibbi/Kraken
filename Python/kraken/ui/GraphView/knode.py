@@ -44,7 +44,6 @@ class KNodePortCircle(PortCircle):
             self.setDefaultPen(QtGui.QPen(QtGui.QColor(204, 0, 0), 1.5))
             self.setHoverPen(QtGui.QPen(QtGui.QColor(255, 155, 100), 2.0))
 
-
     def canConnectTo(self, otherPortCircle):
 
         # Check if you're trying to connect to a port on the same node.
@@ -103,6 +102,7 @@ class KNodeOutputPort(OutputPort):
     def getComponentOutput(self):
         return self.componentOutput
 
+
 class KNode(Node):
 
     def __init__(self, graph, component):
@@ -126,25 +126,28 @@ class KNode(Node):
         self.setUnselectedColor(self.getColor().darker(125))
         self.setSelectedColor(self.getColor().lighter(175))
 
-
     def getName(self):
         return self.__component.getDecoratedName()
 
     def getComponent(self):
         return self.__component
 
-    #########################
-    ## Graph Pos
+    def resetData(self):
+        comp = self.getComponent()
+        comp.resetData()
 
+    # ==========
+    # Graph Pos
+    # ==========
     def translate(self, x, y):
         super(KNode, self).translate(x, y)
         graphPos = self.getGraphPos()
         self.__component.setGraphPos( Vec2(graphPos.x(), graphPos.y()) )
 
 
-    #########################
-    ## Events
-
+    # =======
+    # Events
+    # =======
     def mouseDoubleClickEvent(self, event):
         if self.__inspectorWidget is None:
             parentWidget = self.getGraph().getGraphViewWidget()
@@ -155,8 +158,5 @@ class KNode(Node):
 
         super(KNode, self).mouseDoubleClickEvent(event)
 
-
     def inspectorClosed(self):
         self.__inspectorWidget = None
-
-

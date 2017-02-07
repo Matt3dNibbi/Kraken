@@ -169,7 +169,11 @@ class KGraphView(GraphView):
                 def copySettings():
                     self.copySettings(pos)
 
+                def resetData():
+                    graphicItem.resetData()
+
                 contextMenu.addAction("Copy").triggered.connect(copySettings)
+                contextMenu.addAction("Reset Data").triggered.connect(resetData)
 
                 if self.getClipboardData() is not None:
 
